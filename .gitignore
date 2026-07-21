@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+/build/
+app/build/
+
+# Local configuration (machine-specific SDK path)
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystores — never commit signing keys
+*.jks
+*.keystore
+
+# Vendor UHF SDK — proprietary, not ours to redistribute.
+# Drop it into app/libs/ yourself (see app/libs/README.txt).
+app/libs/*.aar
+app/libs/*.jar
+
+# OS cruft
+.DS_Store

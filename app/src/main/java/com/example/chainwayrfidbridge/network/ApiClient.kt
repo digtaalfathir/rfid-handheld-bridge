@@ -25,7 +25,7 @@ class ApiClient {
         return try {
             val payload = buildPayload(config.mode.key, tags.map { it.epc }, config.toApiFields(), isoNow())
             val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val request = Request.Builder().url(config.apiUrl).post(body).build()
+            val request = Request.Builder().url(config.fullApiUrl()).post(body).build()
 
             client.newCall(request).execute().use { resp ->
                 if (resp.isSuccessful) null else "HTTP ${resp.code} ${resp.body?.string().orEmpty().take(200)}"

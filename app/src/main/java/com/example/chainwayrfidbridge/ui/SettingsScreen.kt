@@ -96,7 +96,9 @@ fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             SectionCard(title = "Konfigurasi API") {
-                LabeledField("API URL", draft.apiUrl, errors["apiUrl"]) { draft = draft.copy(apiUrl = it) }
+                LabeledField("Base URL", draft.baseUrl, errors["baseUrl"]) { draft = draft.copy(baseUrl = it) }
+                Spacer(Modifier.height(8.dp))
+                LabeledField("Endpoint", draft.endpoint, errors["endpoint"]) { draft = draft.copy(endpoint = it) }
                 Spacer(Modifier.height(8.dp))
                 LabeledField("Reader ID", draft.readerId, errors["readerId"]) { draft = draft.copy(readerId = it) }
                 Spacer(Modifier.height(8.dp))
@@ -105,7 +107,7 @@ fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
                 OutlinedButton(
                     onClick = {
                         testing = true
-                        viewModel.testConnection(draft.apiUrl) { error ->
+                        viewModel.testConnection(draft.fullApiUrl()) { error ->
                             testing = false
                             Toast.makeText(
                                 context,

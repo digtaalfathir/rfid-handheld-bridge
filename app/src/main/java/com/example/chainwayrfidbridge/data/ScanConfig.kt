@@ -13,7 +13,8 @@ enum class ScanMode(val key: String, val label: String) {
 
 data class ScanConfig(
     val mode: ScanMode = ScanMode.WO,
-    val apiUrl: String = "http://192.168.1.31:3030/rfid",
+    val baseUrl: String = "http://192.168.1.31:3030",
+    val endpoint: String = "/rfid",
     val readerId: String = "C72",
     val antenna: String = "1",
     val rrType: String = "T1B",
@@ -30,11 +31,18 @@ data class ScanConfig(
         )
     }
 
+    /** Combines baseUrl + endpoint into the full request URL, regardless of slashes on either side. */
+    fun fullApiUrl(): String {
+        val base = baseUrl.trimEnd('/')
+        val path = endpoint.trim().trim('/')
+        return if (path.isEmpty()) base else "$base/$path"
+    }
+
     /** Field name -> error message, empty when the config is valid. */
     fun validate(): Map<String, String> {
         val errors = mutableMapOf<String, String>()
-        if (apiUrl.isBlank() || (!apiUrl.startsWith("http://") && !apiUrl.startsWith("https://"))) {
-            errors["apiUrl"] = "API URL harus diawali http:// atau https://"
+        if (baseUrl.isBlank() || (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://"))) {
+            errors["baseUrl"] = "Base URL harus diawali http:// atau https://"
         }
         if (mode == ScanMode.WO) {
             if (readerId.isBlank()) errors["readerId"] = "Reader ID wajib diisi"

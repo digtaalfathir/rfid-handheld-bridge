@@ -11,7 +11,8 @@ class ConfigRepository(context: Context) {
 
     fun load(): ScanConfig = ScanConfig(
         mode = ScanMode.fromKey(prefs.getString("mode", defaults.mode.key)),
-        apiUrl = prefs.getString("api_url", defaults.apiUrl) ?: defaults.apiUrl,
+        baseUrl = prefs.getString("base_url", defaults.baseUrl) ?: defaults.baseUrl,
+        endpoint = prefs.getString("endpoint", defaults.endpoint) ?: defaults.endpoint,
         readerId = prefs.getString("reader_id", defaults.readerId) ?: defaults.readerId,
         antenna = prefs.getString("antenna", defaults.antenna) ?: defaults.antenna,
         rrType = prefs.getString("rr_type", defaults.rrType) ?: defaults.rrType,
@@ -23,7 +24,8 @@ class ConfigRepository(context: Context) {
     fun save(config: ScanConfig) {
         prefs.edit()
             .putString("mode", config.mode.key)
-            .putString("api_url", config.apiUrl)
+            .putString("base_url", config.baseUrl)
+            .putString("endpoint", config.endpoint)
             .putString("reader_id", config.readerId)
             .putString("antenna", config.antenna)
             .putString("rr_type", config.rrType)
