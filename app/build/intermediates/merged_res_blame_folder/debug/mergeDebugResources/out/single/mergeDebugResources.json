@@ -1,0 +1,82 @@
+[
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "/home/stechoq/.gradle/daemon/8.13/com.example.chainwayrfidbridge.app-main-53:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.chainwayrfidbridge.app-debug-51:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.example.chainwayrfidbridge.app-main-53:/mipmap-xxxhdpi/ic_launcher.png"
+    }
+]
