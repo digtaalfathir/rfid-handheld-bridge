@@ -20,16 +20,24 @@ class PayloadTest {
     }
 
     @Test
-    fun registerMode_sendsMakerRrTypeAndYear() {
+    fun registerMode_sendsMakerRrTypeYearReaderAndAntenna() {
         val json = buildPayload(
             "register",
             listOf("E1", "E2"),
-            mapOf("rr_type" to "TRIAL", "maker_name" to "Acme", "initial_year" to "2026"),
+            mapOf(
+                "rr_type" to "TRIAL",
+                "maker_name" to "Acme",
+                "initial_year" to "2026",
+                "reader_id" to "MC333R",
+                "antenna" to "2"
+            ),
             "ignored"
         )
         assertEquals("TRIAL", json.getString("rr_type"))
         assertEquals("Acme", json.getString("maker_name"))
         assertEquals(2, json.getJSONArray("rfid_numbers").length())
         assertEquals("2026", json.getString("initial_year"))
+        assertEquals("MC333R", json.getString("reader_id"))
+        assertEquals("2", json.getString("antenna"))
     }
 }

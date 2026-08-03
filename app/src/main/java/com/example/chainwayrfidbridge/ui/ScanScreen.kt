@@ -23,7 +23,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
@@ -59,11 +58,13 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.chainwayrfidbridge.ScanUiState
 import com.example.chainwayrfidbridge.ScanViewModel
 import com.example.chainwayrfidbridge.SendStatus
 import com.example.chainwayrfidbridge.SortOption
+import com.example.chainwayrfidbridge.UpdateStatus
 import com.example.chainwayrfidbridge.data.TagRecord
 import com.example.chainwayrfidbridge.ui.theme.ErrorRed
 import com.example.chainwayrfidbridge.ui.theme.NewTagHighlight
@@ -79,14 +80,15 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val strings = LocalStrings.current
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Stechoq RFID Suite", fontWeight = FontWeight.SemiBold) },
+                title = { Text(strings.appTitle, fontWeight = FontWeight.SemiBold) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Pengaturan")
+                        Icon(Icons.Filled.Settings, contentDescription = strings.settingsDescription)
                     }
                 }
             )
@@ -98,6 +100,15 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            if (state.updateStatus !is UpdateStatus.Idle) {
+                UpdateBanner(
+                    status = state.updateStatus,
+                    onDownload = { viewModel.downloadUpdate() },
+                    onInstall = { viewModel.installUpdate() }
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
             SummaryCard(
                 state = state,
                 onToggleScan = { viewModel.toggleScan() },
@@ -119,7 +130,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
             if (state.tags.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
-                        "Belum ada tag terbaca",
+                        strings.emptyTagList,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(32.dp)
                     )
@@ -133,7 +144,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     items(state.tags, key = { it.epc }) { tag ->
                         TagRow(tag) { epc ->
                             clipboard.setText(AnnotatedString(epc))
-                            Toast.makeText(context, "EPC disalin", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.epcCopiedToast, Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -149,15 +160,16 @@ private fun SummaryCard(
     onStartNew: () -> Unit,
     onRetrySend: () -> Unit
 ) {
+    val strings = LocalStrings.current
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth()) {
-                StatItem("Total Terdeteksi", state.totalReads.toString(), Modifier.weight(1f))
-                StatItem("Total Unik", state.tags.size.toString(), Modifier.weight(1f))
+                StatItem(strings.totalDetected, state.totalReads.toString(), Modifier.weight(1f))
+                StatItem(strings.totalUnique, state.tags.size.toString(), Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Scan terakhir: ${formatTime(state.lastScanTime)}",
+                "${strings.lastScanPrefix}${formatTime(state.lastScanTime)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -172,7 +184,7 @@ private fun SummaryCard(
                 ) {
                     Icon(Icons.Filled.Stop, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Stop Scan")
+                    Text(strings.stopScan)
                 }
 
                 state.tags.isEmpty() -> Button(
@@ -182,28 +194,41 @@ private fun SummaryCard(
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Mulai Scan")
+                    Text(strings.startScan)
                 }
 
+                // No icons and tight horizontal padding here on purpose: the default
+                // ButtonDefaults.ContentPadding (24dp each side) plus an icon leaves too little
+                // room for the label on a half-width button on narrower screens (e.g. Zebra
+                // handhelds), which wrapped "New Scan"/"Continue" onto a clipped second line.
                 else -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = onStartNew,
                         enabled = state.readerConnected,
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f).height(48.dp)
                     ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Scan Baru")
+                        Text(strings.scanNew, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Button(
                         onClick = onToggleScan,
                         enabled = state.readerConnected,
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f).height(48.dp)
                     ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Lanjutkan")
+                        Text(strings.continueScan, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                }
+            }
+
+            AnimatedVisibility(visible = state.scanStartError != null) {
+                Column {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "${strings.scanStartErrorPrefix}${state.scanStartError.orEmpty()}",
+                        color = ErrorRed,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
 
@@ -218,28 +243,83 @@ private fun SummaryCard(
 }
 
 @Composable
+private fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstall: () -> Unit) {
+    val strings = LocalStrings.current
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            when (status) {
+                is UpdateStatus.Available -> {
+                    Text(
+                        "${strings.updateAvailablePrefix}${status.info.version}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
+                        Text(strings.updateNowButton, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                UpdateStatus.Downloading -> {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(strings.downloadingUpdate, style = MaterialTheme.typography.bodyMedium)
+                }
+                is UpdateStatus.ReadyToInstall -> {
+                    Text(
+                        strings.updateReadyToInstall,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = onInstall, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
+                        Text(strings.installUpdateButton, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                is UpdateStatus.Error -> {
+                    Text(
+                        "${strings.updateErrorPrefix}${status.message}",
+                        color = ErrorRed,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                        Text(strings.retry, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                UpdateStatus.Idle -> {}
+            }
+        }
+    }
+}
+
+@Composable
 private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
+    val strings = LocalStrings.current
     when (status) {
         is SendStatus.Sending -> Row(verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
             Spacer(Modifier.width(6.dp))
-            Text("Mengirim...", style = MaterialTheme.typography.bodySmall)
+            Text(strings.sending, style = MaterialTheme.typography.bodySmall)
         }
         is SendStatus.Success -> Text(
-            "Terkirim (${status.count} tag)",
+            strings.sentSuccess(status.count),
             color = SuccessGreen,
             style = MaterialTheme.typography.bodySmall
         )
         is SendStatus.Error -> Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Gagal kirim: ${status.message}",
+                "${strings.sendErrorPrefix}${status.message}",
                 color = ErrorRed,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(6.dp))
             OutlinedButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                Text("Retry", style = MaterialTheme.typography.labelMedium)
+                Text(strings.retry, style = MaterialTheme.typography.labelMedium)
             }
         }
         SendStatus.Idle -> {}
@@ -272,18 +352,19 @@ private fun SearchSortRow(
     sortOption: SortOption,
     onSortChange: (SortOption) -> Unit
 ) {
+    val strings = LocalStrings.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         CompactSearchField(query = query, onQueryChange = onQueryChange, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(4.dp))
         Box {
             var expanded by remember { mutableStateOf(false) }
             IconButton(onClick = { expanded = true }) {
-                Icon(Icons.Filled.Sort, contentDescription = "Urutkan")
+                Icon(Icons.Filled.Sort, contentDescription = strings.sortDescription)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 SortOption.entries.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option.label) },
+                        text = { Text(strings.sortLabel(option)) },
                         onClick = { onSortChange(option); expanded = false }
                     )
                 }
@@ -294,6 +375,7 @@ private fun SearchSortRow(
 
 @Composable
 private fun CompactSearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
     Surface(
         modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(20.dp),
@@ -313,7 +395,7 @@ private fun CompactSearchField(query: String, onQueryChange: (String) -> Unit, m
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        "Cari EPC...",
+                        strings.searchPlaceholder,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -331,6 +413,7 @@ private fun CompactSearchField(query: String, onQueryChange: (String) -> Unit, m
 
 @Composable
 private fun TagRow(tag: TagRecord, onCopy: (String) -> Unit) {
+    val strings = LocalStrings.current
     var highlight by remember(tag.epc) { mutableStateOf(tag.isNew) }
     LaunchedEffect(tag.epc) {
         if (tag.isNew) {
@@ -360,7 +443,7 @@ private fun TagRow(tag: TagRecord, onCopy: (String) -> Unit) {
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (tag.isNew) "BARU" else "LAMA",
+                        if (tag.isNew) strings.tagNew else strings.tagExisting,
                         style = MaterialTheme.typography.labelSmall,
                         color = if (tag.isNew) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -374,7 +457,7 @@ private fun TagRow(tag: TagRecord, onCopy: (String) -> Unit) {
             }
             Icon(
                 Icons.Filled.ContentCopy,
-                contentDescription = "Copy EPC",
+                contentDescription = strings.copyEpcDescription,
                 modifier = Modifier
                     .size(20.dp)
                     .clickable { onCopy(tag.epc) }

@@ -10,6 +10,8 @@ fun buildPayload(mode: String, epcs: List<String>, cfg: Map<String, String>, tim
             put("maker_name", cfg["maker_name"])
             put("rfid_numbers", JSONArray(epcs))
             put("initial_year", cfg["initial_year"])
+            put("reader_id", cfg["reader_id"])
+            put("antenna", cfg["antenna"])
         }
     } else {
         JSONObject().apply {

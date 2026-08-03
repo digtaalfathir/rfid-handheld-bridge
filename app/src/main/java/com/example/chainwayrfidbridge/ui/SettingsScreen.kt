@@ -12,18 +12,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -38,32 +40,43 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.chainwayrfidbridge.ScanViewModel
+import com.example.chainwayrfidbridge.data.AppLanguage
 import com.example.chainwayrfidbridge.data.ScanConfig
 import com.example.chainwayrfidbridge.data.ScanMode
+import com.example.chainwayrfidbridge.data.ValidationErrorType
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
+fun SettingsScreen(
+    viewModel: ScanViewModel,
+    language: AppLanguage,
+    onLanguageChange: (AppLanguage) -> Unit,
+    onDone: () -> Unit
+) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     var draft by remember { mutableStateOf(viewModel.config.value) }
-    var errors by remember { mutableStateOf(emptyMap<String, String>()) }
+    var errors by remember { mutableStateOf(emptyMap<String, ValidationErrorType>()) }
     var testing by remember { mutableStateOf(false) }
     val antennaOptions = remember { viewModel.antennaOptions() }
     val rrTypeOptions = remember { viewModel.rrTypeOptions() }
+    val baseUrlOptions = remember { viewModel.baseUrlOptions() }
+    val initialYearOptions = remember { viewModel.initialYearOptions() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pengaturan", fontWeight = FontWeight.SemiBold) },
+                title = { Text(strings.settingsTitle, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = strings.backDescription)
                     }
                 }
             )
@@ -76,7 +89,7 @@ fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            SectionCard(title = "Mode") {
+            SectionCard(title = strings.modeTitle) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ScanMode.entries.forEach { mode ->
                         val selected = draft.mode == mode
@@ -95,14 +108,18 @@ fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = "Konfigurasi API") {
-                LabeledField("Base URL", draft.baseUrl, errors["baseUrl"]) { draft = draft.copy(baseUrl = it) }
+            SectionCard(title = strings.apiConfigTitle) {
+                DropdownField(strings.baseUrlLabel, draft.baseUrl, baseUrlOptions, errors["baseUrl"]?.let(strings::validationMessage)) {
+                    draft = draft.copy(baseUrl = it)
+                }
                 Spacer(Modifier.height(8.dp))
-                LabeledField("Endpoint", draft.endpoint, errors["endpoint"]) { draft = draft.copy(endpoint = it) }
+                ReadOnlyField(strings.endpointLabel, draft.mode.endpoint)
                 Spacer(Modifier.height(8.dp))
-                LabeledField("Reader ID", draft.readerId, errors["readerId"]) { draft = draft.copy(readerId = it) }
+                ReadOnlyField(strings.readerIdLabel, draft.readerId)
                 Spacer(Modifier.height(8.dp))
-                DropdownField("Antenna", draft.antenna, antennaOptions, errors["antenna"]) { draft = draft.copy(antenna = it) }
+                DropdownField(strings.antennaLabel, draft.antenna, antennaOptions, errors["antenna"]?.let(strings::validationMessage)) {
+                    draft = draft.copy(antenna = it)
+                }
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = {
@@ -111,7 +128,7 @@ fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
                             testing = false
                             Toast.makeText(
                                 context,
-                                if (error == null) "Server dapat dijangkau" else "Gagal: $error",
+                                if (error == null) strings.serverReachable else "${strings.testFailedPrefix}$error",
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -125,30 +142,77 @@ fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
                         Icon(Icons.Filled.NetworkCheck, contentDescription = null)
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text(if (testing) "Menguji..." else "Test Connection")
+                    Text(if (testing) strings.testing else strings.testConnection)
                 }
             }
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = "Register Configuration") {
-                DropdownField("RR Type", draft.rrType, rrTypeOptions, errors["rrType"]) { draft = draft.copy(rrType = it) }
+            SectionCard(title = strings.registerConfigTitle) {
+                DropdownField(strings.rrTypeLabel, draft.rrType, rrTypeOptions, errors["rrType"]?.let(strings::validationMessage)) {
+                    draft = draft.copy(rrType = it)
+                }
                 Spacer(Modifier.height(8.dp))
-                LabeledField("Maker Name", draft.makerName, errors["makerName"]) { draft = draft.copy(makerName = it) }
+                LabeledField(strings.makerNameLabel, draft.makerName, errors["makerName"]?.let(strings::validationMessage)) {
+                    draft = draft.copy(makerName = it)
+                }
                 Spacer(Modifier.height(8.dp))
-                LabeledField("Initial Year", draft.initialYear, errors["initialYear"]) { draft = draft.copy(initialYear = it) }
+                DropdownField(strings.initialYearLabel, draft.initialYear, initialYearOptions, errors["initialYear"]?.let(strings::validationMessage)) {
+                    draft = draft.copy(initialYear = it)
+                }
             }
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = "Power (dBm)") {
-                Text("${draft.power} dBm", style = MaterialTheme.typography.bodyMedium)
+            SectionCard(title = strings.powerTitle) {
+                Text("${strings.powerLevelPrefix}${draft.power}", style = MaterialTheme.typography.bodyMedium)
                 Slider(
                     value = draft.power.toFloat(),
                     onValueChange = { draft = draft.copy(power = it.roundToInt()) },
                     valueRange = ScanConfig.MIN_POWER.toFloat()..ScanConfig.MAX_POWER.toFloat(),
                     steps = ScanConfig.MAX_POWER - ScanConfig.MIN_POWER - 1
                 )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            SectionCard(title = strings.soundTitle) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(strings.soundToggleLabel, style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = draft.soundEnabled, onCheckedChange = { draft = draft.copy(soundEnabled = it) })
+                }
+                if (draft.soundEnabled) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(strings.soundVolumeLabel, style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = draft.soundVolume.toFloat(),
+                        onValueChange = { draft = draft.copy(soundVolume = it.roundToInt()) },
+                        valueRange = ScanConfig.MIN_VOLUME.toFloat()..ScanConfig.MAX_VOLUME.toFloat()
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            SectionCard(title = strings.languageTitle) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppLanguage.entries.forEach { lang ->
+                        val label = if (lang == AppLanguage.EN) strings.languageEnglish else strings.languageIndonesian
+                        if (lang == language) {
+                            Button(onClick = { onLanguageChange(lang) }, modifier = Modifier.weight(1f)) {
+                                Text(label)
+                            }
+                        } else {
+                            OutlinedButton(onClick = { onLanguageChange(lang) }, modifier = Modifier.weight(1f)) {
+                                Text(label)
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(20.dp))
@@ -158,30 +222,30 @@ fun SettingsScreen(viewModel: ScanViewModel, onDone: () -> Unit) {
                     onClick = {
                         draft = viewModel.resetConfig()
                         errors = emptyMap()
-                        Toast.makeText(context, "Konfigurasi direset ke default", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strings.configResetToast, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Filled.RestartAlt, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Reset")
+                    Text(strings.reset)
                 }
                 Button(
                     onClick = {
                         val result = viewModel.saveConfig(draft)
                         errors = result
                         if (result.isEmpty()) {
-                            Toast.makeText(context, "Konfigurasi tersimpan", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.configSavedToast, Toast.LENGTH_SHORT).show()
                             onDone()
                         } else {
-                            Toast.makeText(context, "Periksa kembali input yang belum valid", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.configInvalidToast, Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Filled.Save, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Simpan")
+                    Text(strings.save)
                 }
             }
         }
@@ -212,28 +276,49 @@ private fun LabeledField(label: String, value: String, error: String?, onChange:
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DropdownField(label: String, selected: String, options: List<String>, error: String?, onSelect: (String) -> Unit) {
+private fun ReadOnlyField(label: String, value: String) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = {},
+        readOnly = true,
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+/**
+ * A plain, always-editable text field paired with a suggestions menu — deliberately not
+ * ExposedDropdownMenuBox, which intercepts taps on the field to reopen the menu instead of
+ * letting the user place a cursor, so a picked value could never be cleared to type something
+ * outside the list. The icon button is the only thing that opens/closes the menu; the field
+ * itself behaves like any other text field at all times.
+ */
+@Composable
+private fun DropdownField(label: String, value: String, options: List<String>, error: String?, onValueChange: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    Box {
         OutlinedTextField(
-            value = selected,
-            onValueChange = { onSelect(it); expanded = true },
+            value = value,
+            onValueChange = onValueChange,
             label = { Text(label) },
             isError = error != null,
             supportingText = { if (error != null) Text(error) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor()
+            singleLine = true,
+            trailingIcon = {
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
-                        onSelect(option)
+                        onValueChange(option)
                         expanded = false
                     }
                 )

@@ -8,9 +8,14 @@ android {
     defaultConfig {
         applicationId "com.example.chainwayrfidbridge"
         minSdk 21
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        // Kept below 33 on purpose: the Zebra RFID SDK's Readers class registers a broadcast
+        // receiver without RECEIVER_EXPORTED/RECEIVER_NOT_EXPORTED, which Android turns into a
+        // hard SecurityException once the app's targetSdk reaches 33 (Android 13's stricter
+        // receiver registration rules) — that crash only shows up on newer Android 13+ handhelds,
+        // not the older test unit, since the OS only enforces it for apps opting in via targetSdk.
+        targetSdk 32
+        versionCode 2
+        versionName "1.1"
     }
 
     buildTypes {
@@ -28,9 +33,16 @@ android {
     }
     buildFeatures {
         compose true
+        buildConfig true
     }
     composeOptions {
         kotlinCompilerExtensionVersion "1.5.3"
+    }
+    lint {
+        // targetSdk is intentionally held below 33 (see the comment above) to work around a
+        // Zebra SDK crash — this app is sideloaded directly onto handhelds, never published to
+        // Play Store, so the Play policy check that would otherwise fail the build is moot here.
+        disable 'ExpiredTargetSdkVersion'
     }
 }
 
@@ -40,6 +52,9 @@ dependencies {
 
     implementation 'androidx.core:core-ktx:1.10.1'
     implementation 'com.squareup.okhttp3:okhttp:4.11.0'
+    // AndroidX replacement for android.support.v4.content.LocalBroadcastManager, which the
+    // Zebra RFID SDK references internally (built against the old pre-AndroidX support library).
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
 
     implementation platform('androidx.compose:compose-bom:2023.10.01')
     implementation 'androidx.compose.ui:ui'
@@ -52,4 +67,7 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
 
     testImplementation 'junit:junit:4.13.2'
+    // Real org.json impl for unit tests — Android's unit-test classpath stubs org.json.JSONObject
+    // (throws "not mocked" on any method call) unless a real implementation shadows it.
+    testImplementation 'org.json:json:20231013'
 }

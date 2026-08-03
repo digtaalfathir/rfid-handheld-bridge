@@ -7,13 +7,24 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.chainwayrfidbridge.data.AppLanguage
+import com.example.chainwayrfidbridge.data.ConfigRepository
+import com.example.chainwayrfidbridge.ui.DevicePickerScreen
+import com.example.chainwayrfidbridge.ui.LocalStrings
 import com.example.chainwayrfidbridge.ui.ScanScreen
 import com.example.chainwayrfidbridge.ui.SettingsScreen
+import com.example.chainwayrfidbridge.ui.stringsFor
 import com.example.chainwayrfidbridge.ui.theme.ChainwayRfidTheme
 
+private const val ROUTE_PICKER = "picker"
 private const val ROUTE_SCAN = "scan"
 private const val ROUTE_SETTINGS = "settings"
 
@@ -30,28 +41,61 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val configRepo = ConfigRepository(this)
+        val hasDeviceType = configRepo.loadDeviceType() != null
         setContent {
             ChainwayRfidTheme {
-                val navController = rememberNavController()
+                var language by remember { mutableStateOf(configRepo.loadLanguage()) }
 
-                NavHost(navController = navController, startDestination = ROUTE_SCAN) {
-                    composable(
-                        ROUTE_SCAN,
-                        enterTransition = { EnterTransition.None },
-                        exitTransition = { ExitTransition.None }
+                CompositionLocalProvider(LocalStrings provides stringsFor(language)) {
+                    val navController = rememberNavController()
+
+                    NavHost(
+                        navController = navController,
+                        startDestination = if (hasDeviceType) ROUTE_SCAN else ROUTE_PICKER
                     ) {
-                        ScanScreen(viewModel = viewModel, onOpenSettings = { navController.navigate(ROUTE_SETTINGS) })
-                    }
-                    composable(
-                        ROUTE_SETTINGS,
-                        enterTransition = { EnterTransition.None },
-                        exitTransition = { ExitTransition.None }
-                    ) {
-                        SettingsScreen(viewModel = viewModel, onDone = { navController.popBackStack() })
+                        composable(
+                            ROUTE_PICKER,
+                            enterTransition = { EnterTransition.None },
+                            exitTransition = { ExitTransition.None }
+                        ) {
+                            DevicePickerScreen(onSelected = {
+                                navController.navigate(ROUTE_SCAN) {
+                                    popUpTo(ROUTE_PICKER) { inclusive = true }
+                                }
+                            })
+                        }
+                        composable(
+                            ROUTE_SCAN,
+                            enterTransition = { EnterTransition.None },
+                            exitTransition = { ExitTransition.None }
+                        ) {
+                            ScanScreen(viewModel = viewModel, onOpenSettings = { navController.navigate(ROUTE_SETTINGS) })
+                        }
+                        composable(
+                            ROUTE_SETTINGS,
+                            enterTransition = { EnterTransition.None },
+                            exitTransition = { ExitTransition.None }
+                        ) {
+                            SettingsScreen(
+                                viewModel = viewModel,
+                                language = language,
+                                onLanguageChange = {
+                                    language = it
+                                    configRepo.saveLanguage(it)
+                                },
+                                onDone = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.onAppForeground()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

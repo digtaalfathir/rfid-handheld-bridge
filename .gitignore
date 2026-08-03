@@ -30,3 +30,9 @@ app/libs/*.jar
 
 # OS cruft
 .DS_Store
+
+# Stray compiled class files from ad-hoc bytecode inspection
+*.class
+
+# Local release build output (APKs are attached to GitHub Releases, not committed)
+/release-out/

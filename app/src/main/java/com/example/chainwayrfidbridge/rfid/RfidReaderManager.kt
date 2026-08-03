@@ -1,61 +1,45 @@
 package com.example.chainwayrfidbridge.rfid
 
 import android.content.Context
-import com.rscja.deviceapi.RFIDWithUHFUART
-import com.rscja.deviceapi.interfaces.IUHFInventoryCallback
 
 /**
- * Thin wrapper around the Chainway UHF SDK so hardware calls live in one place,
- * reusable by future features (write tag, lock/kill) without touching UI code.
- *
- * Uses the SDK's own setInventoryCallback() push API (confirmed present in this aar
- * and is what Chainway's own reference app uses) rather than polling
- * readTagFromBuffer() in a custom thread — the polling approach pegged a CPU core
- * at 100% for the whole scan session and was the real source of the app-wide lag.
+ * Vendor-agnostic contract for a UHF reader backend. ScanViewModel talks only to this
+ * interface — it doesn't know or care whether the concrete implementation is Chainway's
+ * SDK, Zebra's, or anything else added later.
  */
-class RfidReaderManager {
+interface RfidReaderManager {
 
-    private var reader: RFIDWithUHFUART? = null
-    private var scanning = false
+    fun connect(context: Context): Boolean
 
-    fun connect(context: Context): Boolean {
-        return try {
-            val r = RFIDWithUHFUART.getInstance()
-            val ok = r.init(context.applicationContext)
-            reader = if (ok) r else null
-            ok
-        } catch (e: Exception) {
-            reader = null
-            false
-        }
-    }
+    fun isConnected(): Boolean
 
-    fun isConnected(): Boolean = reader != null
+    /** [level] is 1-30, matching Chainway's native dBm range; Zebra maps it onto its own power table. */
+    fun setPower(level: Int): Boolean
 
-    fun setPower(dbm: Int): Boolean = reader?.setPower(dbm) == true
+    /**
+     * Starts continuous inventory; [onTag] is invoked for every read (thread depends on the
+     * implementation). Returns null on success, or a human-readable reason on failure (e.g.
+     * the reader refusing to scan while it thinks it's charging).
+     */
+    fun startInventory(onTag: (epc: String, rssi: String) -> Unit): String?
 
-    /** Starts continuous inventory; [onTag] is invoked by the SDK's own callback thread for every read. */
-    fun startInventory(onTag: (epc: String, rssi: String) -> Unit): Boolean {
-        val r = reader ?: return false
-        if (scanning) return true
+    fun stopInventory()
 
-        r.setInventoryCallback(IUHFInventoryCallback { info ->
-            val epc = info?.epc
-            if (!epc.isNullOrEmpty()) onTag(epc, info.rssi.orEmpty())
-        })
-        val started = r.startInventoryTag()
-        scanning = started
-        return started
-    }
+    fun release()
 
-    fun stopInventory() {
-        scanning = false
-        reader?.stopInventory()
-    }
+    /**
+     * Wires the device's physical scan trigger, for backends where trigger press/release
+     * comes through the SDK itself rather than a raw Android key event (e.g. Zebra).
+     * No-op by default — Chainway's trigger is handled at the Activity level instead.
+     */
+    fun setTriggerListener(onPressed: () -> Unit, onReleased: () -> Unit) {}
 
-    fun release() {
-        stopInventory()
-        reader?.free()
-        reader = null
-    }
+    /**
+     * Called every time the app returns to the foreground. Re-asserts hardware ownership
+     * where the OS/vendor service can reclaim it while backgrounded — e.g. Zebra's barcode
+     * (DataWedge) engine takes back the physical trigger button whenever another app is in
+     * front, so the RFID trigger mode needs to be reapplied on resume or the trigger fires
+     * both scanners at once. No-op by default.
+     */
+    fun onForeground() {}
 }
