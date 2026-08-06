@@ -98,6 +98,11 @@ class MainActivity : ComponentActivity() {
         viewModel.onAppForeground()
     }
 
+    override fun onPause() {
+        super.onPause()
+        viewModel.onAppBackground()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (event.scanCode == SCAN_TRIGGER_SCANCODE) {
             if (event.repeatCount == 0) viewModel.onTriggerPressed()

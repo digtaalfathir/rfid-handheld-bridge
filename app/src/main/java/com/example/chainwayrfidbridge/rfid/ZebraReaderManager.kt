@@ -1,6 +1,7 @@
 package com.example.chainwayrfidbridge.rfid
 
 import android.content.Context
+import android.content.Intent
 import com.zebra.rfid.api3.ENUM_TRANSPORT
 import com.zebra.rfid.api3.ENUM_TRIGGER_MODE
 import com.zebra.rfid.api3.HANDHELD_TRIGGER_EVENT_TYPE
@@ -18,7 +19,6 @@ import com.zebra.rfid.api3.START_TRIGGER_TYPE
 import com.zebra.rfid.api3.STATUS_EVENT_TYPE
 import com.zebra.rfid.api3.STOP_TRIGGER_TYPE
 import com.zebra.rfid.api3.TriggerInfo
-import kotlin.math.roundToInt
 
 /**
  * Zebra RFID API3 SDK backend (built-in handheld reader). Verified method-by-method against
@@ -38,6 +38,7 @@ class ZebraReaderManager : RfidReaderManager, Readers.RFIDReaderEventHandler {
 
     private var readers: Readers? = null
     private var reader: RFIDReader? = null
+    private var appContext: Context? = null
     private var scanning = false
     private var maxPowerIndex = 0
     private var onTagCallback: ((epc: String, rssi: String) -> Unit)? = null
@@ -71,6 +72,8 @@ class ZebraReaderManager : RfidReaderManager, Readers.RFIDReaderEventHandler {
     }
 
     override fun connect(context: Context): Boolean {
+        appContext = context.applicationContext
+        disableDataWedgeBarcodeScanner(context)
         return try {
             val r = readers ?: Readers(context, ENUM_TRANSPORT.SERVICE_SERIAL).also { readers = it }
             Readers.attach(this)
@@ -84,6 +87,21 @@ class ZebraReaderManager : RfidReaderManager, Readers.RFIDReaderEventHandler {
         } catch (e: Exception) {
             reader = null
             false
+        }
+    }
+
+    // Root-cause fix for the trigger firing both RFID and barcode scans at once: DataWedge (Zebra's
+    // barcode engine) reclaims the physical trigger whenever it feels like it, no matter what
+    // ENUM_TRIGGER_MODE we've set — reasserting our own mode on resume only ever papered over it.
+    // This app is the dedicated RFID scanner for this device, so just turn DataWedge's barcode
+    // input off entirely via its public broadcast API rather than fighting it every time.
+    private fun disableDataWedgeBarcodeScanner(context: Context) {
+        try {
+            val intent = Intent("com.symbol.datawedge.api.ACTION")
+            intent.putExtra("com.symbol.datawedge.api.SCANNER_INPUT_PLUGIN", "DISABLE_PLUGIN")
+            context.sendBroadcast(intent)
+        } catch (e: Exception) {
+            // best-effort — DataWedge may not be present on non-Zebra builds of this SDK
         }
     }
 
@@ -119,11 +137,16 @@ class ZebraReaderManager : RfidReaderManager, Readers.RFIDReaderEventHandler {
 
     override fun isConnected(): Boolean = reader?.isConnected() == true
 
-    /** This SDK indexes into a capability table rather than a raw dBm value; map the shared 1-30 level onto it. */
+    // Matches Zebra's own 123RFID app and this reader's real capability table (301 entries,
+    // 0-300 in 0.1 dBm steps on the tested unit) — shown and applied directly, no abstraction
+    // onto a shared scale like Chainway's 1-30 dBm. coerceIn below still guards setPower()
+    // against a differently-sized table on other Zebra models.
+    override val powerRange: IntRange = 0..300
+
     override fun setPower(level: Int): Boolean {
         val r = reader ?: return false
         return try {
-            val index = ((level.coerceIn(1, 30) - 1) / 29.0 * maxPowerIndex).roundToInt().coerceIn(0, maxPowerIndex)
+            val index = level.coerceIn(0, maxPowerIndex)
             val config = r.Config.Antennas.getAntennaRfConfig(1)
             config.setTransmitPowerIndex(index)
             r.Config.Antennas.setAntennaRfConfig(1, config)
@@ -168,10 +191,21 @@ class ZebraReaderManager : RfidReaderManager, Readers.RFIDReaderEventHandler {
         onTriggerReleased = onReleased
     }
 
-    // DataWedge (Zebra's barcode engine) reclaims the physical trigger button while this app
-    // isn't in the foreground, so on return the trigger fires both scanners unless RFID mode
-    // is explicitly reasserted here — matches what Zebra's own sample does in onResume().
-    override fun onForeground() {
+    // DataWedge (Zebra's barcode engine) reclaims the physical trigger button whenever this app
+    // isn't in the foreground — including the moment focus is lost, not only while some other
+    // app stays in front — so reasserting only on return leaves a window where a trigger press
+    // made while backgrounded (background scanning enabled) still fires the barcode laser too.
+    // Reassert on both transitions, and resend the DataWedge disable broadcast on backgrounding
+    // too, since DataWedge may switch to a different profile (e.g. the launcher's) on focus loss
+    // that still has its own barcode input enabled.
+    override fun onForeground() = reassertRfidTriggerMode()
+
+    override fun onBackground() {
+        reassertRfidTriggerMode()
+        appContext?.let { disableDataWedgeBarcodeScanner(it) }
+    }
+
+    private fun reassertRfidTriggerMode() {
         val r = reader ?: return
         try {
             r.Config.setTriggerMode(ENUM_TRIGGER_MODE.RFID_MODE, true)

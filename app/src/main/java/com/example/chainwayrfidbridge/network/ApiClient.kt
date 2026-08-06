@@ -23,7 +23,7 @@ class ApiClient {
     /** Returns null on success, or a human-readable reason on failure. */
     fun sendTags(config: ScanConfig, tags: List<TagRecord>): String? {
         return try {
-            val payload = buildPayload(config.mode.key, tags.map { it.epc }, config.toApiFields(), isoNow())
+            val payload = buildPayload(config, tags.map { it.epc }, isoNow())
             val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val request = Request.Builder().url(config.fullApiUrl()).post(body).build()
 

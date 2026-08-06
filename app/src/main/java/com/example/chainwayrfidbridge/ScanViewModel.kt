@@ -6,6 +6,8 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import com.example.chainwayrfidbridge.data.ConfigRepository
 import com.example.chainwayrfidbridge.data.DeviceType
@@ -18,6 +20,7 @@ import com.example.chainwayrfidbridge.network.UpdateInfo
 import com.example.chainwayrfidbridge.rfid.ChainwayReaderManager
 import com.example.chainwayrfidbridge.rfid.RfidReaderManager
 import com.example.chainwayrfidbridge.rfid.ZebraReaderManager
+import com.example.chainwayrfidbridge.service.ScanStateBus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,11 +32,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val UI_REFRESH_INTERVAL_MS = 200L
 private const val BEEP_DURATION_MS = 60
 private const val BEEP_MIN_INTERVAL_MS = 90L
+private const val BACKGROUND_REASSERT_INTERVAL_MS = 3000L
 
 // Bump versionName in build.gradle to match the "vX.Y" tag whenever a new GitHub release is cut.
 private const val GITHUB_REPO = "digtaalfathir/rfid-handheld-bridge"
@@ -155,9 +162,32 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         context.startActivity(intent)
     }
 
+    private var backgroundReassertJob: Job? = null
+
     /** Call when the app returns to the foreground — see RfidReaderManager.onForeground(). */
     fun onAppForeground() {
+        backgroundReassertJob?.cancel()
+        backgroundReassertJob = null
         viewModelScope.launch(Dispatchers.IO) { reader.onForeground() }
+    }
+
+    /** Call when the app leaves the foreground — see RfidReaderManager.onBackground(). A single
+     * reassertion right at this transition isn't enough: DataWedge re-claims the trigger not
+     * only when we lose focus but again whenever a "real" app with its own DataWedge profile
+     * (e.g. Chrome) comes to foreground — the launcher/home screen apparently doesn't trigger
+     * that, which is why this only ever showed up when opening another app, not going home. Keep
+     * re-asserting on a short interval for as long as we're backgrounded with background
+     * scanning on, so we reclaim the trigger again shortly after DataWedge takes it. */
+    fun onAppBackground() {
+        viewModelScope.launch(Dispatchers.IO) { reader.onBackground() }
+        backgroundReassertJob?.cancel()
+        if (!_config.value.backgroundScanEnabled) return
+        backgroundReassertJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(BACKGROUND_REASSERT_INTERVAL_MS)
+                reader.onBackground()
+            }
+        }
     }
 
     fun toggleScan() {
@@ -167,6 +197,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Physical trigger, pressed: hold-to-scan. Always restarts fresh when tags are already present. */
     fun onTriggerPressed() {
+        if (!canScanNow()) return
         val s = _uiState.value
         if (s.scanning) return
         if (s.tags.isEmpty()) toggleScan() else startNewScan()
@@ -174,7 +205,16 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Physical trigger, released: stop (mirrors the on-screen Stop Scan button). */
     fun onTriggerReleased() {
+        if (!canScanNow()) return
         if (_uiState.value.scanning) toggleScan()
+    }
+
+    /** Background Scanning off + app not visible = ignore the trigger entirely. Some of these
+     * handhelds route the trigger key straight to the app regardless of window focus, so this
+     * check (not Activity focus) is what actually enforces the setting. */
+    private fun canScanNow(): Boolean {
+        if (_config.value.backgroundScanEnabled) return true
+        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
     }
 
     /** Clears previously collected tags, then starts a scan from scratch. */
@@ -207,10 +247,14 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     _uiState.update {
                         it.copy(scanning = true, sendStatus = SendStatus.Idle, scanStartError = null)
                     }
+                    publishTags()
+                    ScanStateBus.update(ScanStateBus.BubbleState.SCANNING, synchronized(tagMap) { tagMap.size })
                     uiRefreshJob = viewModelScope.launch(Dispatchers.Default) {
                         while (isActive) {
                             delay(UI_REFRESH_INTERVAL_MS)
                             publishTags()
+                            // Live count on the floating bubble while backgrounded, same cadence as the in-app tag list.
+                            ScanStateBus.update(ScanStateBus.BubbleState.SCANNING, synchronized(tagMap) { tagMap.size })
                         }
                     }
                 } else {
@@ -275,8 +319,31 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     sendStatus = if (snapshot.isEmpty()) SendStatus.Idle else SendStatus.Sending
                 )
             }
-            if (snapshot.isEmpty()) return@launch
+            if (snapshot.isEmpty()) {
+                ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+                return@launch
+            }
+            saveCsvBackup(snapshot)
             sendSnapshot(snapshot)
+        }
+    }
+
+    /** Local backup, independent of whether the API send below succeeds — best-effort, never
+     * blocks or fails the actual scan-send flow if storage is unavailable for some reason. */
+    private fun saveCsvBackup(tags: List<TagRecord>) {
+        if (!_config.value.localCsvEnabled) return
+        try {
+            val dir = File(getApplication<Application>().getExternalFilesDir(null), "rfid_stc")
+            dir.mkdirs()
+            val filename = "scan_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.csv"
+            File(dir, filename).bufferedWriter().use { writer ->
+                writer.write("epc,first_seen,last_seen,read_count,antenna,rssi,is_new\n")
+                tags.forEach { t ->
+                    writer.write("${t.epc},${t.firstSeen},${t.lastSeen},${t.readCount},${t.antenna},${t.rssi},${t.isNew}\n")
+                }
+            }
+        } catch (e: Exception) {
+            // best-effort — local backup failure shouldn't block sending to the server
         }
     }
 
@@ -294,6 +361,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error))
         }
+        ScanStateBus.update(
+            if (error == null) ScanStateBus.BubbleState.SUCCESS else ScanStateBus.BubbleState.ERROR,
+            snapshot.size
+        )
     }
 
     fun setSearchQuery(query: String) {
@@ -331,21 +402,27 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setPower(dbm: Int) {
-        _config.update { it.copy(power = dbm) }
+    /** Native valid range for the connected backend — Chainway 1-30 dBm, Zebra 0-300 (its own
+     * capability table units, shown/edited directly rather than remapped onto a shared scale). */
+    val powerRange: IntRange get() = reader.powerRange
+
+    fun setPower(level: Int) {
+        _config.update { it.copy(power = level) }
         configRepo.save(_config.value)
-        viewModelScope.launch(Dispatchers.IO) { reader.setPower(dbm) }
+        viewModelScope.launch(Dispatchers.IO) { reader.setPower(level) }
     }
 
     /** Returns field->error map; empty means the config was valid and got saved. */
     fun saveConfig(newConfig: ScanConfig): Map<String, ValidationErrorType> {
-        val errors = newConfig.validate()
+        val errors = newConfig.validate(reader.powerRange)
         if (errors.isEmpty()) {
             configRepo.save(newConfig)
             configRepo.rememberCustomAntenna(newConfig.antenna)
             configRepo.rememberCustomRrType(newConfig.rrType)
             configRepo.rememberCustomBaseUrl(newConfig.baseUrl)
+            configRepo.rememberCustomEndpoint(newConfig.endpoint)
             configRepo.rememberCustomInitialYear(newConfig.initialYear)
+            configRepo.rememberCustomFactoryCode(newConfig.factoryCode)
             _config.value = newConfig
             viewModelScope.launch(Dispatchers.IO) { reader.setPower(newConfig.power) }
         }
@@ -358,7 +435,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     fun baseUrlOptions(): List<String> = configRepo.baseUrlOptions()
 
+    fun endpointOptions(): List<String> = configRepo.endpointOptions()
+
     fun initialYearOptions(): List<String> = configRepo.initialYearOptions()
+
+    fun factoryCodeOptions(): List<String> = configRepo.factoryCodeOptions()
 
     fun resetConfig(): ScanConfig {
         val defaults = configRepo.reset()

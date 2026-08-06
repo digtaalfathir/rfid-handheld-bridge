@@ -64,6 +64,9 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.8.1'
     implementation 'androidx.navigation:navigation-compose:2.7.5'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2'
+    // App-wide foreground/background detection for the floating scan bubble — more reliable
+    // than individual Activity callbacks, which fire on things like rotation too.
+    implementation 'androidx.lifecycle:lifecycle-process:2.6.2'
     debugImplementation 'androidx.compose.ui:ui-tooling'
 
     testImplementation 'junit:junit:4.13.2'

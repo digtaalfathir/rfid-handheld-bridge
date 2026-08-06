@@ -1,5 +1,8 @@
 package com.example.chainwayrfidbridge.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +24,7 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,10 +69,13 @@ fun SettingsScreen(
     var draft by remember { mutableStateOf(viewModel.config.value) }
     var errors by remember { mutableStateOf(emptyMap<String, ValidationErrorType>()) }
     var testing by remember { mutableStateOf(false) }
+    val powerRange = remember { viewModel.powerRange }
     val antennaOptions = remember { viewModel.antennaOptions() }
     val rrTypeOptions = remember { viewModel.rrTypeOptions() }
     val baseUrlOptions = remember { viewModel.baseUrlOptions() }
+    val endpointOptions = remember { viewModel.endpointOptions() }
     val initialYearOptions = remember { viewModel.initialYearOptions() }
+    val factoryCodeOptions = remember { viewModel.factoryCodeOptions() }
 
     Scaffold(
         topBar = {
@@ -104,6 +111,17 @@ fun SettingsScreen(
                         }
                     }
                 }
+                if (draft.mode == ScanMode.REGISTER) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = draft.opname, onCheckedChange = { draft = draft.copy(opname = it) })
+                        Spacer(Modifier.width(4.dp))
+                        Text(strings.opnameLabel, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -113,7 +131,9 @@ fun SettingsScreen(
                     draft = draft.copy(baseUrl = it)
                 }
                 Spacer(Modifier.height(8.dp))
-                ReadOnlyField(strings.endpointLabel, draft.mode.endpoint)
+                DropdownField(strings.endpointLabel, draft.endpoint, endpointOptions, errors["endpoint"]?.let(strings::validationMessage)) {
+                    draft = draft.copy(endpoint = it)
+                }
                 Spacer(Modifier.height(8.dp))
                 ReadOnlyField(strings.readerIdLabel, draft.readerId)
                 Spacer(Modifier.height(8.dp))
@@ -160,6 +180,10 @@ fun SettingsScreen(
                 DropdownField(strings.initialYearLabel, draft.initialYear, initialYearOptions, errors["initialYear"]?.let(strings::validationMessage)) {
                     draft = draft.copy(initialYear = it)
                 }
+                Spacer(Modifier.height(8.dp))
+                DropdownField(strings.factoryCodeLabel, draft.factoryCode, factoryCodeOptions, null) {
+                    draft = draft.copy(factoryCode = it)
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -169,8 +193,8 @@ fun SettingsScreen(
                 Slider(
                     value = draft.power.toFloat(),
                     onValueChange = { draft = draft.copy(power = it.roundToInt()) },
-                    valueRange = ScanConfig.MIN_POWER.toFloat()..ScanConfig.MAX_POWER.toFloat(),
-                    steps = ScanConfig.MAX_POWER - ScanConfig.MIN_POWER - 1
+                    valueRange = powerRange.first.toFloat()..powerRange.last.toFloat(),
+                    steps = powerRange.last - powerRange.first - 1
                 )
             }
 
@@ -192,6 +216,56 @@ fun SettingsScreen(
                         value = draft.soundVolume.toFloat(),
                         onValueChange = { draft = draft.copy(soundVolume = it.roundToInt()) },
                         valueRange = ScanConfig.MIN_VOLUME.toFloat()..ScanConfig.MAX_VOLUME.toFloat()
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            SectionCard(title = strings.localCsvTitle) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        strings.localCsvToggleLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Switch(checked = draft.localCsvEnabled, onCheckedChange = { draft = draft.copy(localCsvEnabled = it) })
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            SectionCard(title = strings.backgroundScanTitle) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        strings.backgroundScanToggleLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = draft.backgroundScanEnabled,
+                        onCheckedChange = { enabled ->
+                            draft = draft.copy(backgroundScanEnabled = enabled)
+                            if (enabled && !Settings.canDrawOverlays(context)) {
+                                Toast.makeText(context, strings.overlayPermissionToast, Toast.LENGTH_LONG).show()
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                        }
                     )
                 }
             }

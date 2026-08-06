@@ -13,7 +13,11 @@ interface RfidReaderManager {
 
     fun isConnected(): Boolean
 
-    /** [level] is 1-30, matching Chainway's native dBm range; Zebra maps it onto its own power table. */
+    /** Native valid range for [setPower]'s [level] — each backend exposes its own hardware's
+     * actual scale directly (no shared abstraction) rather than remapping onto a common range. */
+    val powerRange: IntRange get() = 1..30
+
+    /** [level] must be within [powerRange] for this backend. */
     fun setPower(level: Int): Boolean
 
     /**
@@ -42,4 +46,12 @@ interface RfidReaderManager {
      * both scanners at once. No-op by default.
      */
     fun onForeground() {}
+
+    /**
+     * Called every time the app leaves the foreground (Home pressed, another app opened, etc).
+     * DataWedge reclaims the trigger the moment focus is lost, not just while some other app
+     * stays in front — reasserting only on return leaves a window where a background trigger
+     * press (with background scanning enabled) fires the barcode laser too. No-op by default.
+     */
+    fun onBackground() {}
 }

@@ -1,24 +1,20 @@
 package com.example.chainwayrfidbridge
 
+import com.example.chainwayrfidbridge.data.ScanConfig
 import org.json.JSONArray
 import org.json.JSONObject
 
-fun buildPayload(mode: String, epcs: List<String>, cfg: Map<String, String>, timestamp: String): JSONObject {
-    return if (mode == "register") {
-        JSONObject().apply {
-            put("rr_type", cfg["rr_type"])
-            put("maker_name", cfg["maker_name"])
-            put("rfid_numbers", JSONArray(epcs))
-            put("initial_year", cfg["initial_year"])
-            put("reader_id", cfg["reader_id"])
-            put("antenna", cfg["antenna"])
-        }
-    } else {
-        JSONObject().apply {
-            put("reader_id", cfg["reader_id"])
-            put("antenna", cfg["antenna"])
-            put("idHex", JSONArray(epcs))
-            put("timestamp", timestamp)
-        }
+/** WO and Register now share one endpoint and one payload shape; "mode" tells them apart server-side. */
+fun buildPayload(config: ScanConfig, epcs: List<String>, timestamp: String): JSONObject =
+    JSONObject().apply {
+        put("rr_type", config.rrType)
+        put("maker_name", config.makerName)
+        put("idHex", JSONArray(epcs))
+        put("initial_year", config.initialYear)
+        put("reader_id", config.readerId)
+        put("antenna", config.antenna)
+        put("timestamp", timestamp)
+        put("opname", config.opname)
+        put("mode", config.mode.key)
+        put("factory_code", config.factoryCode)
     }
-}

@@ -5,8 +5,14 @@
     <!-- Lets the app prompt the system "Install unknown app" dialog for self-updates
          downloaded from GitHub Releases, instead of requiring a laptop/adb reinstall. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Floating scan-status bubble shown while backgrounded (granted via system Settings, not
+         a runtime dialog — see the prompt in SettingsScreen). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".RfidBridgeApplication"
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
         android:label="@string/app_name"
@@ -23,6 +29,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".service.FloatingScanService"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
