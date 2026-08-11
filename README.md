@@ -1,27 +1,175 @@
 # Stechoq RFID Suite
 
-Native Android UHF RFID scanning app for warehouse handhelds. Supports **Chainway C72** and
-**Zebra** (MC33/MC3300x) devices from a single APK — a one-time device-picker screen on first
-launch decides which vendor SDK backend to use, so the same build can be installed on either
-type of hardware.
+A native Android app for scanning UHF RFID tags on warehouse handhelds and pushing the results to
+a warehouse-management API. Built for **Chainway C72** and **Zebra** (MC33 / MC3300x) devices from
+a single APK — the same build installs on either brand of hardware.
 
-## Features
+This document is both a user guide (what every screen and setting does) and a developer reference
+(project layout, build, and release process).
 
-- Continuous multi-tag inventory scanning with live tag table (EPC, read count, RSSI, antenna,
-  new/existing status, last-seen time)
-- Physical hardware trigger button support (hold-to-scan), including while backgrounded — a
-  floating status bubble (idle/scanning/sent/failed, live tag count) shows over other apps when
-  "Background Scanning" is on, tap it to reopen the app
-- WO and Register modes share one endpoint and payload shape (see [API payload](#api-payload)) —
-  Base URL and endpoint are both editable dropdowns that remember custom values
-- Power range is native per vendor, not abstracted: Chainway 1–30 dBm, Zebra 0–300 (matches
-  Zebra's own 123RFID app); adjustable beep volume; local CSV backup per scan session
-  (`rfid_stc/` folder, toggle in Settings); English/Indonesian language switch (default English)
-- Self-update: checks GitHub Releases on launch and on every return to the foreground, offering
-  an in-app download + install prompt — deployed handhelds never need a laptop again. Current
-  version is shown at the bottom of Settings.
+> 📸 Screenshots below are placeholders — see the note in [Screenshots](#screenshots) for how to
+> regenerate them from a connected device.
 
-## Project layout
+## Table of contents
+
+- [Overview](#overview)
+- [First launch: choosing your device](#first-launch-choosing-your-device)
+- [The Scan screen](#the-scan-screen)
+- [Sending scans: WO vs Register mode](#sending-scans-wo-vs-register-mode)
+- [Background scanning & the floating bubble](#background-scanning--the-floating-bubble)
+- [Local CSV backup](#local-csv-backup)
+- [Self-update](#self-update)
+- [Settings reference](#settings-reference)
+- [Language](#language)
+- [Troubleshooting](#troubleshooting)
+- [For developers](#for-developers)
+
+## Overview
+
+- Continuous multi-tag UHF inventory scanning, hold-to-scan via the handheld's physical trigger
+- Live tag table: EPC, read count, RSSI, antenna, new-vs-already-seen, last-seen time
+- One shared payload format posted to your API regardless of mode (WO or Register)
+- Works whether the app is in the foreground or backgrounded — a small floating status bubble
+  keeps the operator informed while browsing something else
+- Self-updates over the air from GitHub Releases, no cable required after first install
+- English and Indonesian, switchable anytime, applied instantly across every screen
+
+## First launch: choosing your device
+
+The very first time the app opens on a handheld, it asks which hardware it's running on:
+
+- **Chainway C72** — built-in UHF reader, accessed via Chainway's `DeviceAPI` SDK
+- **Zebra** — built-in UHF reader on MC33 / MC3300x handhelds, accessed via Zebra's RFID API3 SDK
+
+This choice is remembered for that device (stored separately from the rest of Settings, so
+"Reset" never accidentally changes it) and decides which vendor backend the app talks to for the
+rest of its life on that unit. To change it, reinstall the app or clear its data.
+
+## The Scan screen
+
+The main screen, and the only one an operator needs day to day.
+
+- **Summary card** — total tags detected (raw reads) and total unique tags this session, plus the
+  time of the last completed scan
+- **Start Scan / Stop Scan** — tap, or hold the physical trigger; releasing the trigger stops the
+  scan the same as tapping Stop
+- **New Scan vs Continue** — once a session has tags, the button row splits: **New Scan** clears
+  everything and starts fresh, **Continue** keeps existing tags and resumes scanning (useful for
+  scanning a large area in passes without losing earlier reads)
+- **Tag list** — sorted and searchable; each row shows the EPC, read count, RSSI, antenna, and a
+  **NEW** / **EXISTING** badge (whether this tag was already in the list before the current scan
+  session started). Tap the copy icon on a row to copy its EPC.
+- **Search & sort** — filter by EPC substring; sort by most recent, EPC (A–Z), read count, or RSSI
+- **Send status** — after a scan stops, the collected tags post to your API automatically; a
+  banner shows Sending → Sent (n tags) or a Retry button on failure
+
+## Sending scans: WO vs Register mode
+
+Switchable in Settings → Mode. Both modes post to the **same endpoint** with the **same JSON
+shape** — a `mode` field in the payload (`"wo"` or `"register"`) is what tells your backend which
+flow it is. See [API payload](#api-payload) for the exact fields.
+
+**Register mode only** adds one extra control: a checkbox, *"Scan result is sent to current
+stock"* — when checked, the payload's `opname` field is `true`, telling the backend this scan
+should also post straight to current stock. It's hidden entirely in WO mode.
+
+## Background scanning & the floating bubble
+
+Off by default. Turn it on in Settings → Background Scanning, and two things change:
+
+1. **The physical trigger keeps working even when the app isn't the foreground app** — hold it
+   while browsing in Chrome, checking the WMS in a browser tab, or anything else, and it still
+   scans. With this off, a trigger press does nothing unless the app is actually on screen.
+2. **A small floating bubble appears** over whatever else is on screen — drag it anywhere, tap it
+   to jump back into the app. Its color tells you the scan state at a glance, no text needed:
+
+   | Color | Meaning |
+   |---|---|
+   | Gray | Idle — not currently scanning |
+   | Blue | Scanning — shows the live unique-tag count in the middle |
+   | Green | Last scan sent successfully — shows how many tags were sent |
+   | Red | Last scan failed to send |
+
+Turning this on requires Android's "Display over other apps" permission — the app prompts for it
+the first time you enable the toggle, one approval per device.
+
+Because this keeps a small foreground service alive while backgrounded, you'll also see a
+low-priority "Background scanning active" notification in the status bar for as long as it's
+running (standard Android requirement for any app doing work while backgrounded — it can't be
+turned off independently of the feature itself).
+
+## Local CSV backup
+
+On by default, in Settings → Local Backup. Every time a scan session stops (successfully or not),
+the full tag list for that session is written to a CSV file on the device, independent of whether
+the send to your server succeeded — a safety net for spotty warehouse WiFi.
+
+Files land in `Android/data/com.example.chainwayrfidbridge/files/rfid_stc/` on the device's
+storage (created automatically if it doesn't exist yet), named `scan_YYYYMMDD_HHMMSS.csv`, one
+file per scan session with columns: `epc, first_seen, last_seen, read_count, antenna, rssi,
+is_new`.
+
+## Self-update
+
+The app checks this repo's GitHub Releases for a newer version on every launch and every time it
+returns to the foreground (throttled to at most once every 5 minutes). If a newer release exists,
+a banner appears on the Scan screen:
+
+1. **Update available: vX.Y.Z** → tap **Update Now** to download
+2. Once downloaded, tap **Install** — this hands off to Android's standard package installer
+3. The very first time on a given device, Android may show its own "allow installs from this app"
+   permission screen — a one-time approval per device, not per update
+
+No laptop, no cable, no manual APK transfer — see [Releasing](#releasing-fully-automated) for how
+new versions get published in the first place.
+
+## Settings reference
+
+Every section, top to bottom:
+
+- **Mode** — WO / Register toggle; Register mode reveals the "opname" checkbox described above
+- **API Configuration**
+  - **Base URL** — editable dropdown, remembers anything you type
+  - **Endpoint** — editable dropdown, defaults to the shared endpoint; independent of Mode
+  - **Reader ID** — read-only, auto-derived from the device (`<model>-<short Android ID>`) so
+    every handheld in a fleet gets a unique, human-readable ID with zero per-device setup
+  - **Antenna** — editable dropdown
+  - **Test Connection** — pings the configured URL and reports whether it's reachable
+- **Register Configuration** — RR Type, Maker Name, Initial Year, and Factory Code, all editable
+  dropdowns that remember custom entries (always sent regardless of mode, since the payload shape
+  is shared)
+- **Power** — native range per vendor, not an abstracted scale: **Chainway 1–30 dBm**, **Zebra
+  0–300** (matching Zebra's own 123RFID app's units directly)
+- **Sound** — beep on tag read, on/off, plus a volume slider when enabled
+- **Local Backup** — the CSV toggle described above
+- **Background Scanning** — the floating-bubble toggle described above
+- **Language** — English / Indonesian, applied instantly, independent of the rest of Settings
+- **Reset** — clears everything above back to defaults (never touches device type or language)
+- **Save** — validates and persists; the app's current version is shown just below this row
+
+## Language
+
+English and Indonesian, switchable anytime from Settings, defaulting to English on first install.
+Every screen's text — including notifications and validation messages — comes from one shared
+string table, so nothing drifts out of sync between languages.
+
+## Troubleshooting
+
+- **"RFID_CHARGING_COMMAND_NOT_ALLOWED" on Zebra** — some Zebra units refuse to start an RFID
+  scan while they believe they're charging, which includes sitting in a powered USB/adb cradle for
+  development. Not a bug — unplug and test normally.
+- **Barcode laser fires alongside RFID on Zebra** — Zebra's DataWedge barcode engine can reclaim
+  the physical trigger when a "real" app (one with its own DataWedge profile, e.g. a browser)
+  comes to the foreground. The app disables DataWedge's scanner plugin on connect and
+  re-asserts RFID trigger mode on every background transition and periodically while
+  backgrounded; if it ever recurs, it's a DataWedge profile issue on that specific unit.
+- **Update won't install on a device you tested with a local/manual build** — Android refuses to
+  install an "update" with an equal-or-lower `versionCode` than what's already there. This only
+  matters if you've been sideloading manual builds outside the normal CI pipeline.
+
+## For developers
+
+### Project layout
 
 ```
 app/src/main/java/com/example/chainwayrfidbridge/
@@ -52,7 +200,7 @@ app/src/main/java/com/example/chainwayrfidbridge/
     └── AppStrings.kt            # All user-facing strings, EN + ID
 ```
 
-## Building
+### Building locally
 
 Requires the vendor SDKs, which are proprietary and **not included in this repo**:
 
@@ -81,28 +229,26 @@ registers a broadcast receiver in a way that Android turns into a hard crash onc
 reaches 33, only on Android 13+ devices. This is a sideloaded app, never published to Play
 Store, so there's no policy reason to target higher.
 
-`versionCode`/`versionName` in `app/build.gradle` fall back to `2`/`"1.1"` for a local build like
-the one above, but CI always overrides both via `-PappVersionCode=`/`-PappVersionName=` — see
-below.
+`versionCode`/`versionName` fall back to `2`/`"1.1"` for a local build like the one above, but CI
+always overrides both via `-PappVersionCode=`/`-PappVersionName=` — see below.
 
-## Releasing an update (automated)
+### Releasing (fully automated)
 
-`.github/workflows/release.yml` builds, signs, tags, and publishes a GitHub Release on every push
-to `main` — no manual build or upload step. Deployed handhelds self-check GitHub Releases on
-launch and on every return to the foreground (see `GITHUB_REPO` in `ScanViewModel.kt`) and prompt
-an in-app update when a newer tag is found; the operator taps through one standard Android
-"install from this app" prompt (a one-time approval per device, not per update).
+`.github/workflows/release.yml` builds, tests, signs, tags, and publishes a GitHub Release on
+every push to `main` — no manual build or upload step, ever. Each run:
 
-Each run:
-1. Computes a version from the run number (`versionCode = <run number>`, `versionName =
-   1.0.<run number>`) — always increasing, which Android requires for an update to install over
-   the previous version, without ever needing to hand-edit `build.gradle`.
+1. Computes a version from the run number (`versionCode = <run number> + 100`, `versionName =
+   1.2.<run number>`) — always increasing, which Android requires for an update to install over
+   the previous version, without ever hand-editing `build.gradle`. The `+100` offset keeps CI's
+   versionCode safely clear of anything used during local/manual testing.
 2. Builds and unit-tests the release APK with that version baked in.
-3. Signs it with the same keystore every already-deployed handheld was signed with (see setup
-   below) — using a different key would make every existing install reject the update.
+3. Signs it with the same keystore every already-deployed handheld was signed with — using a
+   different key would make every existing install reject the update.
 4. Tags the commit `vX.Y.Z` and publishes a GitHub Release with the signed APK attached.
 
-### One-time CI setup
+Deployed handhelds pick it up automatically per [Self-update](#self-update) above.
+
+#### One-time CI setup
 
 Vendor SDKs are proprietary and too large for a GitHub Actions secret (64 KB limit), so they're
 restored from a dedicated release instead of committed to the repo:
@@ -122,7 +268,7 @@ The signing keystore *is* small enough for a secret — add it as `RELEASE_KEYST
 gh secret set RELEASE_KEYSTORE_BASE64 < <(base64 -w0 ~/.android/debug.keystore)
 ```
 
-## API payload
+### API payload
 
 WO and Register both post the same shape to the same endpoint — `mode` is what tells them apart
 server-side. Base URL and endpoint are both editable in Settings (`endpoint` below is just the
@@ -148,3 +294,11 @@ shared default):
 by hand — every handheld in a fleet gets a unique, readable ID with no per-device setup.
 `opname` is Register-only in the UI (a checkbox that only appears in that mode, meaning "also
 post straight to current stock") but is always present in the payload, `false` outside Register.
+
+## Screenshots
+
+The screenshots that would normally live in each section above aren't included yet — they need to
+be captured from a connected device (`adb exec-out screencap -p`) and committed under
+`docs/screenshots/`. Regenerate them by connecting a handheld running this app and capturing: the
+device picker, an active scan with tags, each Settings section, and the floating bubble both idle
+and mid-scan over another app.
