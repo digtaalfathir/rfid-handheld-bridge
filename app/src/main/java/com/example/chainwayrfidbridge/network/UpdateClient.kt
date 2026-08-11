@@ -16,8 +16,11 @@ data class UpdateInfo(val version: String, val downloadUrl: String)
  */
 class UpdateClient {
 
+    // callTimeout covers the whole call, including download()'s APK transfer (~12MB) — 10s was
+    // only ever enough for the small latestRelease() JSON check and timed out real downloads on
+    // anything but fast WiFi. connectTimeout stays short so an unreachable host still fails fast.
     private val client = OkHttpClient.Builder()
-        .callTimeout(10, TimeUnit.SECONDS)
+        .callTimeout(120, TimeUnit.SECONDS)
         .connectTimeout(5, TimeUnit.SECONDS)
         .build()
 

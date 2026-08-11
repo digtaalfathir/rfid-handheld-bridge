@@ -7,9 +7,6 @@ a single APK — the same build installs on either brand of hardware.
 This document is both a user guide (what every screen and setting does) and a developer reference
 (project layout, build, and release process).
 
-> 📸 Screenshots below are placeholders — see the note in [Screenshots](#screenshots) for how to
-> regenerate them from a connected device.
-
 ## Table of contents
 
 - [Overview](#overview)
@@ -49,6 +46,8 @@ rest of its life on that unit. To change it, reinstall the app or clear its data
 
 The main screen, and the only one an operator needs day to day.
 
+![Scan screen, idle](docs/screenshots/scan-empty.png)
+
 - **Summary card** — total tags detected (raw reads) and total unique tags this session, plus the
   time of the last completed scan
 - **Start Scan / Stop Scan** — tap, or hold the physical trigger; releasing the trigger stops the
@@ -56,12 +55,17 @@ The main screen, and the only one an operator needs day to day.
 - **New Scan vs Continue** — once a session has tags, the button row splits: **New Scan** clears
   everything and starts fresh, **Continue** keeps existing tags and resumes scanning (useful for
   scanning a large area in passes without losing earlier reads)
+- **Send status** — after a scan stops, the collected tags post to your API automatically; a
+  banner shows Sending → Sent (n tags) or a Retry button on failure
+
+![Scan screen with results — summary card, Sent banner, New Scan / Continue](docs/screenshots/scan-with-tags.png)
+
 - **Tag list** — sorted and searchable; each row shows the EPC, read count, RSSI, antenna, and a
   **NEW** / **EXISTING** badge (whether this tag was already in the list before the current scan
   session started). Tap the copy icon on a row to copy its EPC.
 - **Search & sort** — filter by EPC substring; sort by most recent, EPC (A–Z), read count, or RSSI
-- **Send status** — after a scan stops, the collected tags post to your API automatically; a
-  banner shows Sending → Sent (n tags) or a Retry button on failure
+
+![Tag rows showing the NEW badge on a freshly-seen tag](docs/screenshots/scan-tags-new-badge.png)
 
 ## Sending scans: WO vs Register mode
 
@@ -72,6 +76,8 @@ flow it is. See [API payload](#api-payload) for the exact fields.
 **Register mode only** adds one extra control: a checkbox, *"Scan result is sent to current
 stock"* — when checked, the payload's `opname` field is `true`, telling the backend this scan
 should also post straight to current stock. It's hidden entirely in WO mode.
+
+![Register mode selected, revealing the "opname" checkbox](docs/screenshots/settings-mode-register-opname.png)
 
 ## Background scanning & the floating bubble
 
@@ -89,6 +95,14 @@ Off by default. Turn it on in Settings → Background Scanning, and two things c
    | Blue | Scanning — shows the live unique-tag count in the middle |
    | Green | Last scan sent successfully — shows how many tags were sent |
    | Red | Last scan failed to send |
+
+<table>
+<tr>
+<td><img src="docs/screenshots/floating-bubble-home.png" alt="Floating bubble, idle, over the home screen" /><br/><sub>Idle, over the home screen</sub></td>
+<td><img src="docs/screenshots/floating-bubble-scanning.png" alt="Floating bubble, scanning, with live tag count" /><br/><sub>Scanning, live count</sub></td>
+<td><img src="docs/screenshots/floating-bubble-over-chrome.png" alt="Floating bubble over Chrome" /><br/><sub>Floating over Chrome</sub></td>
+</tr>
+</table>
 
 Turning this on requires Android's "Display over other apps" permission — the app prompts for it
 the first time you enable the toggle, one approval per device.
@@ -127,6 +141,8 @@ new versions get published in the first place.
 
 Every section, top to bottom:
 
+![Mode and API Configuration](docs/screenshots/settings-mode-api.png)
+
 - **Mode** — WO / Register toggle; Register mode reveals the "opname" checkbox described above
 - **API Configuration**
   - **Base URL** — editable dropdown, remembers anything you type
@@ -135,17 +151,31 @@ Every section, top to bottom:
     every handheld in a fleet gets a unique, human-readable ID with zero per-device setup
   - **Antenna** — editable dropdown
   - **Test Connection** — pings the configured URL and reports whether it's reachable
+
+![Reader ID, Antenna, Test Connection](docs/screenshots/settings-reader-antenna-test.png)
+
 - **Register Configuration** — RR Type, Maker Name, Initial Year, and Factory Code, all editable
   dropdowns that remember custom entries (always sent regardless of mode, since the payload shape
   is shared)
+
+![Register Configuration section](docs/screenshots/settings-register-config.png)
+
 - **Power** — native range per vendor, not an abstracted scale: **Chainway 1–30 dBm**, **Zebra
   0–300** (matching Zebra's own 123RFID app's units directly)
 - **Sound** — beep on tag read, on/off, plus a volume slider when enabled
+
+![Power slider and Sound settings](docs/screenshots/settings-power-sound-backup.png)
+
 - **Local Backup** — the CSV toggle described above
 - **Background Scanning** — the floating-bubble toggle described above
+
+![Local Backup and Background Scanning toggles](docs/screenshots/settings-backup-bgscan.png)
+
 - **Language** — English / Indonesian, applied instantly, independent of the rest of Settings
 - **Reset** — clears everything above back to defaults (never touches device type or language)
 - **Save** — validates and persists; the app's current version is shown just below this row
+
+![Language switch, Reset/Save, and the version footer](docs/screenshots/settings-language-background.png)
 
 ## Language
 
@@ -166,6 +196,9 @@ string table, so nothing drifts out of sync between languages.
 - **Update won't install on a device you tested with a local/manual build** — Android refuses to
   install an "update" with an equal-or-lower `versionCode` than what's already there. This only
   matters if you've been sideloading manual builds outside the normal CI pipeline.
+- **Update download times out** — the in-app updater downloads the APK itself (a few MB) over
+  whatever network the handheld has; on slow warehouse WiFi the first attempt can occasionally
+  time out. Tapping Update Now again retries cleanly.
 
 ## For developers
 
@@ -294,11 +327,3 @@ shared default):
 by hand — every handheld in a fleet gets a unique, readable ID with no per-device setup.
 `opname` is Register-only in the UI (a checkbox that only appears in that mode, meaning "also
 post straight to current stock") but is always present in the payload, `false` outside Register.
-
-## Screenshots
-
-The screenshots that would normally live in each section above aren't included yet — they need to
-be captured from a connected device (`adb exec-out screencap -p`) and committed under
-`docs/screenshots/`. Regenerate them by connecting a handheld running this app and capturing: the
-device picker, an active scan with tags, each Settings section, and the floating bubble both idle
-and mid-scan over another app.

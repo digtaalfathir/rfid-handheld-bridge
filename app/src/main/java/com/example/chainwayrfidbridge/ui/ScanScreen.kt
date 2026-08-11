@@ -439,13 +439,19 @@ private fun TagRow(tag: TagRecord, onCopy: (String) -> Unit) {
                         tag.epc,
                         fontWeight = FontWeight.Medium,
                         style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        // Weighted so the badge on the right always keeps its natural width and
+                        // never wraps — without this the EPC (long) claims full row width first,
+                        // squeezing "EXISTING" into too little room and forcing it onto two lines.
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (tag.isNew) strings.tagNew else strings.tagExisting,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (tag.isNew) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (tag.isNew) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
                     )
                 }
                 Text(
