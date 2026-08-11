@@ -54,12 +54,17 @@ class FloatingScanService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        // Must always succeed: if this service was started via startForegroundService() and
+        // onCreate() throws before startForeground() actually runs, Android kills the whole app
+        // process (not just this service) with a fatal RemoteServiceException — so the "nice"
+        // notification build is wrapped and never allowed to prevent startForeground() from
+        // being called at all.
+        startForeground(NOTIFICATION_ID, buildNotificationSafely())
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
-        addBubble()
+        runCatching { addBubble() }
         scope.launch {
             ScanStateBus.data.collect { updateBubble(it) }
         }
@@ -158,12 +163,37 @@ class FloatingScanService : Service() {
         view.text = if (data.state == ScanStateBus.BubbleState.IDLE) "" else data.tagCount.toString()
     }
 
-    private fun buildNotification(): Notification {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(NotificationManager::class.java)
-            val channel = NotificationChannel(CHANNEL_ID, "RFID background scan", NotificationManager.IMPORTANCE_MIN)
-            manager.createNotificationChannel(channel)
+    private fun buildNotificationSafely(): Notification {
+        ensureChannel()
+        return try {
+            buildNotification()
+        } catch (e: Exception) {
+            // Bare-bones fallback with zero external dependencies (no ConfigRepository, no
+            // strings, no Activity intent) — guaranteed not to throw, so startForeground() always
+            // has something valid to call with.
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle("Stechoq RFID Suite")
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setOngoing(true)
+                .build()
         }
+    }
+
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        try {
+            val manager = getSystemService(NotificationManager::class.java) ?: return
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "RFID background scan", NotificationManager.IMPORTANCE_MIN)
+            )
+        } catch (e: Exception) {
+            // best-effort — if this fails, NotificationCompat.Builder below still works on API 26+
+            // as long as SOME channel with this ID exists; if none does the notification is just dropped
+        }
+    }
+
+    private fun buildNotification(): Notification {
         val strings = stringsFor(ConfigRepository(this).loadLanguage())
         val openIntent = PendingIntent.getActivity(
             this, 0,

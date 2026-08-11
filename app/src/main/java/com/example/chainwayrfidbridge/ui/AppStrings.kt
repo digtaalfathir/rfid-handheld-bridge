@@ -91,6 +91,7 @@ data class AppStrings(
     val save: String,
     val configSavedToast: String,
     val configInvalidToast: String,
+    val versionPrefix: String,
 
     // Validation errors
     val errorBaseUrlFormat: String,
@@ -211,6 +212,7 @@ val EnglishStrings = AppStrings(
     save = "Save",
     configSavedToast = "Configuration saved",
     configInvalidToast = "Please check the invalid fields",
+    versionPrefix = "Version ",
 
     errorBaseUrlFormat = "Base URL must start with http:// or https://",
     errorReaderIdRequired = "Reader ID is required",
@@ -299,6 +301,7 @@ val IndonesianStrings = AppStrings(
     save = "Simpan",
     configSavedToast = "Konfigurasi tersimpan",
     configInvalidToast = "Periksa kembali input yang belum valid",
+    versionPrefix = "Versi ",
 
     errorBaseUrlFormat = "Base URL harus diawali http:// atau https://",
     errorReaderIdRequired = "Reader ID wajib diisi",

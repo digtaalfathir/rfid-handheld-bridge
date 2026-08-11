@@ -1,6 +1,13 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
+// CI overrides both via -PappVersionCode=/-PappVersionName= on every push, so each automated
+// release gets a unique, always-increasing versionCode (Android requires this for an update to
+// install over the previous one) without ever needing to edit this file. These two are only
+// what a local/manual build falls back to.
+def ciVersionCode = (project.findProperty("appVersionCode") as String)?.toInteger() ?: 2
+def ciVersionName = (project.findProperty("appVersionName") as String) ?: "1.1"
+
 android {
     namespace 'com.example.chainwayrfidbridge'
     compileSdk 34
@@ -14,8 +21,8 @@ android {
         // receiver registration rules) — that crash only shows up on newer Android 13+ handhelds,
         // not the older test unit, since the OS only enforces it for apps opting in via targetSdk.
         targetSdk 32
-        versionCode 2
-        versionName "1.1"
+        versionCode ciVersionCode
+        versionName ciVersionName
     }
 
     buildTypes {

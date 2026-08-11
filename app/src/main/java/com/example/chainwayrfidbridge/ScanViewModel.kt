@@ -41,6 +41,7 @@ private const val UI_REFRESH_INTERVAL_MS = 200L
 private const val BEEP_DURATION_MS = 60
 private const val BEEP_MIN_INTERVAL_MS = 90L
 private const val BACKGROUND_REASSERT_INTERVAL_MS = 3000L
+private const val UPDATE_CHECK_MIN_INTERVAL_MS = 5 * 60 * 1000L
 
 // Bump versionName in build.gradle to match the "vX.Y" tag whenever a new GitHub release is cut.
 private const val GITHUB_REPO = "digtaalfathir/rfid-handheld-bridge"
@@ -120,9 +121,17 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     // Held separately from updateStatus so a retry after a download Error can find the same
     // release again without re-checking GitHub (Error itself doesn't carry the UpdateInfo).
     private var pendingUpdate: UpdateInfo? = null
+    private var lastUpdateCheckAtMs = 0L
 
-    /** Silent background check — never surfaces an error when there's simply nothing newer. */
+    /** Silent background check — never surfaces an error when there's simply nothing newer. Runs
+     * on cold start (from init) and every time the app is reopened (from onAppForeground), since
+     * a ViewModel surviving a simple background/foreground cycle wouldn't otherwise re-check on
+     * what the operator experiences as "opening the app" again. Debounced so rapidly switching
+     * away and back doesn't hit GitHub's API on every single resume. */
     private fun checkForUpdate() {
+        val now = System.currentTimeMillis()
+        if (now - lastUpdateCheckAtMs < UPDATE_CHECK_MIN_INTERVAL_MS) return
+        lastUpdateCheckAtMs = now
         viewModelScope.launch(Dispatchers.IO) {
             val info = try {
                 updateClient.latestRelease(GITHUB_REPO)
@@ -169,6 +178,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         backgroundReassertJob?.cancel()
         backgroundReassertJob = null
         viewModelScope.launch(Dispatchers.IO) { reader.onForeground() }
+        checkForUpdate()
     }
 
     /** Call when the app leaves the foreground — see RfidReaderManager.onBackground(). A single

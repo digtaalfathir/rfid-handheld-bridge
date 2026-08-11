@@ -48,7 +48,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.chainwayrfidbridge.BuildConfig
 import com.example.chainwayrfidbridge.ScanViewModel
 import com.example.chainwayrfidbridge.data.AppLanguage
 import com.example.chainwayrfidbridge.data.ScanConfig
@@ -322,6 +324,16 @@ fun SettingsScreen(
                     Text(strings.save)
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
