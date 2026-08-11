@@ -45,13 +45,15 @@ jobs:
           mkdir -p ~/.android
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
 
-      # Base offset keeps versionCode safely clear of anything used during local/manual testing
-      # (topped out at 2 this session) — otherwise an early CI run could tie or fall behind a
-      # versionCode already installed on a test device, and Android refuses to install over that.
+      # Base offset keeps versionCode safely clear of anything used during local/manual testing.
+      # Bumped from +100 to +1000 after a real collision: local test builds during development
+      # reached versionCode 110, which was already higher than an early CI run's 100+run_number,
+      # so that CI release silently failed to install as an "update" on the test device. +1000
+      # gives much more headroom against this ever recurring during ordinary local testing.
       - name: Compute version
         id: version
         run: |
-          echo "code=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
+          echo "code=$(( ${{ github.run_number }} + 1000 ))" >> "$GITHUB_OUTPUT"
           echo "name=1.2.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
