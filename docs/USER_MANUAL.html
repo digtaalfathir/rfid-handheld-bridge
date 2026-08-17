@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Buku Panduan Penggunaan - Stechoq RFID Suite</title>
+<style>
+  @page { size: A4; margin: 2cm 1.8cm; }
+  body { font-family: "Helvetica", "Arial", sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; }
+  h1 { font-size: 22pt; color: #0D47A1; margin-top: 0; }
+  h2 { font-size: 16pt; color: #0D47A1; border-bottom: 2px solid #1565C0; padding-bottom: 4px; margin-top: 0; page-break-before: always; }
+  h3 { font-size: 13pt; color: #1565C0; margin-bottom: 4px; }
+  .cover { text-align: center; padding-top: 5cm; }
+  .cover .badge { display: inline-block; background: #1565C0; color: white; padding: 10px 24px; border-radius: 20px; font-size: 13pt; margin-bottom: 40px; }
+  .cover h1 { font-size: 30pt; margin-bottom: 6px; }
+  .cover .subtitle { font-size: 15pt; color: #555; margin-bottom: 60px; }
+  .cover .meta { font-size: 10pt; color: #888; margin-top: 100px; }
+  .toc table { width: 100%; border-collapse: collapse; }
+  .toc td { padding: 6px 4px; font-size: 12pt; }
+  .toc .num { width: 30px; font-weight: bold; color: #1565C0; }
+  .shot { text-align: center; margin: 14px 0; }
+  .shot img { width: 190px; border: 1px solid #ccc; border-radius: 8px; }
+  .shot .cap { font-size: 9.5pt; color: #555; margin-top: 4px; }
+  table.shotrow { width: 100%; border-collapse: collapse; margin: 14px 0; }
+  table.shotrow td { text-align: center; vertical-align: top; padding: 0 6px; }
+  table.shotrow img { width: 160px; border: 1px solid #ccc; border-radius: 8px; }
+  table.shotrow .cap { font-size: 9pt; color: #555; margin-top: 4px; }
+  .note { background: #FFF3E0; border-left: 4px solid #EF6C00; padding: 10px 14px; margin: 14px 0; font-size: 10.5pt; }
+  .tip { background: #E8F5E9; border-left: 4px solid #2E7D32; padding: 10px 14px; margin: 14px 0; font-size: 10.5pt; }
+  .warn { background: #FFEBEE; border-left: 4px solid #C62828; padding: 10px 14px; margin: 14px 0; font-size: 10.5pt; }
+  table.ref { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10.5pt; }
+  table.ref th, table.ref td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  table.ref th { background: #E3F2FD; color: #0D47A1; }
+  .step { margin: 10px 0; }
+  .step .n { display: inline-block; width: 22px; height: 22px; background: #1565C0; color: white; border-radius: 50%; text-align: center; line-height: 22px; font-size: 10pt; margin-right: 6px; }
+  .footer-note { font-size: 9pt; color: #999; text-align: center; margin-top: 30px; }
+  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<div class="cover">
+  <div class="badge">STECHOQ RFID SUITE</div>
+  <h1>Buku Panduan Penggunaan</h1>
+  <div class="subtitle">Aplikasi Scan RFID &amp; Barcode untuk Handheld<br>Chainway C72 &amp; Zebra MC33 / MC3300x</div>
+  <div class="meta">
+    Versi Aplikasi 1.3.x &nbsp;&bull;&nbsp; Edisi Agustus 2026<br>
+    Dokumen internal Stechoq &mdash; untuk operator gudang dan tim IT
+  </div>
+</div>
+
+<!-- ===================== TOC ===================== -->
+<div class="toc-title">
+<h2>Daftar Isi</h2>
+<div class="toc">
+<table>
+<tr><td class="num">1</td><td>Pengenalan Aplikasi</td></tr>
+<tr><td class="num">2</td><td>Memulai: Instalasi &amp; Pemilihan Perangkat</td></tr>
+<tr><td class="num">3</td><td>Layar Utama (Scan)</td></tr>
+<tr><td class="num">4</td><td>Kualitas Sinyal (Quality)</td></tr>
+<tr><td class="num">5</td><td>Mode Barcode</td></tr>
+<tr><td class="num">6</td><td>Mode Pengiriman: WO vs Register</td></tr>
+<tr><td class="num">7</td><td>Scan Latar Belakang &amp; Bulatan Mengambang</td></tr>
+<tr><td class="num">8</td><td>Backup CSV Lokal</td></tr>
+<tr><td class="num">9</td><td>Update Aplikasi Otomatis</td></tr>
+<tr><td class="num">10</td><td>Panduan Lengkap Pengaturan</td></tr>
+<tr><td class="num">11</td><td>Bahasa Aplikasi</td></tr>
+<tr><td class="num">12</td><td>Pemecahan Masalah (Troubleshooting)</td></tr>
+</table>
+</div>
+</div>
+
+<!-- ===================== 1. PENGENALAN ===================== -->
+<div class="chapter">
+<h2>1. Pengenalan Aplikasi</h2>
+
+<p><b>Stechoq RFID Suite</b> adalah aplikasi Android untuk membaca tag RFID UHF dan barcode
+menggunakan handheld gudang, lalu mengirim hasilnya secara otomatis ke sistem Warehouse
+Management (WMS). Satu aplikasi yang sama dapat dipasang di dua merek perangkat berbeda:</p>
+
+<ul>
+<li><b>Chainway C72</b> &mdash; handheld dengan reader UHF bawaan</li>
+<li><b>Zebra MC33 / MC3300x</b> &mdash; handheld dengan reader UHF bawaan</li>
+</ul>
+
+<p>Fitur utama yang tersedia:</p>
+<ul>
+<li>Scan RFID banyak tag sekaligus, cukup tahan tombol trigger fisik</li>
+<li>Indikator <b>Kualitas</b> sinyal per tag (Kuat / Sedang / Lemah) &mdash; menggantikan angka RSSI mentah yang sulit dibaca operator</li>
+<li><b>Mode Barcode</b> &mdash; beralih dari RFID ke pemindai barcode 1D/2D dengan satu tombol di Pengaturan</li>
+<li>Dua alur pengiriman data: <b>WO</b> dan <b>Register</b>, dengan format data yang sama ke server</li>
+<li>Tetap bisa scan walau aplikasi di latar belakang, dengan bulatan status mengambang di layar</li>
+<li>Backup otomatis ke file CSV di perangkat, sebagai jaring pengaman saat WiFi gudang bermasalah</li>
+<li>Update aplikasi otomatis lewat internet, tanpa kabel data dan tanpa laptop</li>
+<li>Bahasa Indonesia dan Inggris, bisa diganti kapan saja</li>
+</ul>
+
+<div class="tip">
+<b>Untuk siapa dokumen ini?</b> Bab 1&ndash;9 dan 12 ditulis untuk operator lapangan sehari-hari.
+Bab 10 (Pengaturan) lebih rinci dan biasanya hanya disentuh oleh admin/IT saat konfigurasi awal
+sebuah handheld.
+</div>
+</div>
+
+<!-- ===================== 2. MEMULAI ===================== -->
+<div class="chapter">
+<h2>2. Memulai: Instalasi &amp; Pemilihan Perangkat</h2>
+
+<p>Aplikasi dipasang sekali oleh admin/IT (lewat file APK atau update otomatis). Setelah dipasang
+dan dibuka untuk <b>pertama kali</b>, aplikasi akan menanyakan jenis perangkat yang digunakan:</p>
+
+<div class="step"><span class="n">1</span> Pilih <b>Chainway C72</b> jika handheld yang dipakai buatan Chainway.</div>
+<div class="step"><span class="n">2</span> Pilih <b>Zebra</b> jika handheld yang dipakai adalah MC33 atau MC3300x.</div>
+
+<div class="note">
+<b>Penting:</b> Pilihan ini <u>hanya ditanyakan sekali</u> dan disimpan khusus untuk perangkat
+tersebut &mdash; terpisah dari Pengaturan lain, sehingga tombol <b>Reset</b> di Pengaturan tidak
+akan pernah mengubahnya secara tidak sengaja. Untuk mengganti pilihan ini, aplikasi perlu dipasang
+ulang atau datanya dihapus lewat menu Setelan Android &rarr; Aplikasi.
+</div>
+
+<p>Setelah jenis perangkat dipilih, aplikasi langsung masuk ke <b>Layar Utama (Scan)</b> dan siap
+digunakan. Semua pengaturan lain (URL server, mode WO/Register, dsb.) diisi lewat menu
+<b>Pengaturan</b> &mdash; lihat Bab 10.</p>
+</div>
+
+<!-- ===================== 3. LAYAR UTAMA ===================== -->
+<div class="chapter">
+<h2>3. Layar Utama (Scan)</h2>
+
+<p>Ini adalah layar yang paling sering dipakai operator sehari-hari.</p>
+
+<div class="shot">
+  <img src="screenshots/scan-empty.png" width="190" height="317">
+  <div class="cap">Layar Scan dalam keadaan kosong, siap memulai</div>
+</div>
+
+<h3>Bagian-bagian layar</h3>
+<ul>
+<li><b>Kartu ringkasan</b> &mdash; menampilkan <i>Total Terdeteksi</i> (jumlah total pembacaan) dan
+<i>Total Unik</i> (jumlah tag berbeda), serta waktu scan terakhir.</li>
+<li><b>Mulai Scan / Stop Scan</b> &mdash; tekan tombol di layar, atau tahan tombol trigger fisik di
+handheld. Melepas trigger sama seperti menekan Stop.</li>
+<li><b>Scan Baru vs Lanjutkan</b> &mdash; begitu ada tag terbaca, tombol berubah jadi dua pilihan:
+  <ul>
+    <li><b>Scan Baru</b> &mdash; menghapus semua hasil sebelumnya dan mulai sesi baru dari nol</li>
+    <li><b>Lanjutkan</b> &mdash; tetap menyimpan tag yang sudah ada dan melanjutkan scan (berguna
+    untuk menyisir area luas tanpa kehilangan hasil sebelumnya)</li>
+  </ul>
+</li>
+<li><b>Status pengiriman</b> &mdash; setelah scan berhenti, daftar tag otomatis dikirim ke server.
+Muncul status <i>Mengirim &rarr; Terkirim (n tag)</i>, atau tombol <b>Coba Lagi</b> jika gagal.</li>
+</ul>
+
+<h3>Daftar tag</h3>
+<p>Setiap baris pada daftar tag menampilkan:</p>
+<ul>
+<li><b>Kode EPC</b> tag (kode unik tag RFID)</li>
+<li><b>R:</b> jumlah berapa kali tag ini terbaca dalam sesi berjalan</li>
+<li><b>Kualitas</b> &mdash; lihat penjelasan lengkap di Bab 4</li>
+<li>Label <b>BARU</b> atau <b>LAMA</b> &mdash; menandai apakah tag ini baru pertama kali terbaca
+pada sesi ini, atau sudah ada sebelumnya</li>
+<li>Ikon salin &mdash; ketuk untuk menyalin kode EPC tag tersebut</li>
+</ul>
+
+<div class="shot">
+  <img src="screenshots/scan-quality-strong.png" width="190" height="317">
+  <div class="cap">Baris tag: kode EPC, jumlah baca (R), dan label Kualitas</div>
+</div>
+
+<p>Di atas daftar tag terdapat kotak <b>Cari EPC</b> untuk menyaring tag berdasarkan sebagian kode
+EPC, dan ikon urutkan (&#8801;) untuk mengubah urutan: terbaru, EPC (A&ndash;Z), jumlah baca
+terbanyak, atau Kualitas terbaik.</p>
+</div>
+
+<!-- ===================== 4. KUALITAS SINYAL ===================== -->
+<div class="chapter">
+<h2>4. Kualitas Sinyal (Quality)</h2>
+
+<p>Sebelumnya, setiap baris tag menampilkan angka RSSI mentah (misalnya "-58 dBm"), nomor antena,
+dan waktu terakhir terbaca. Operator di lapangan sulit memaknai angka-angka ini, sehingga
+sekarang digantikan dengan satu label sederhana: <b>Kualitas</b>.</p>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/scan-quality-strong.png" width="160" height="267"><div class="cap"><b>Kuat</b> (hijau)</div></td>
+<td><img src="screenshots/scan-quality-medium.png" width="160" height="267"><div class="cap"><b>Sedang</b> (kuning/oranye)</div></td>
+<td><img src="screenshots/scan-quality-weak.png" width="160" height="267"><div class="cap"><b>Lemah</b> (merah)</div></td>
+</tr>
+</table>
+
+<table class="ref">
+<tr><th>Label</th><th>Warna</th><th>Artinya bagi operator</th></tr>
+<tr><td>Kuat</td><td>Hijau</td><td>Sinyal tag sangat baik dan sudah terbaca berkali-kali &mdash; posisi tag ideal, hasil paling dapat diandalkan</td></tr>
+<tr><td>Sedang</td><td>Kuning/oranye</td><td>Sinyal cukup, tapi mungkin perlu didekatkan lagi ke reader untuk hasil lebih meyakinkan</td></tr>
+<tr><td>Lemah</td><td>Merah</td><td>Sinyal lemah dan/atau baru terbaca sekali &mdash; sebaiknya dekatkan tag ke handheld dan scan ulang</td></tr>
+</table>
+
+<div class="note">
+<b>Catatan:</b> Kualitas dihitung otomatis dari kekuatan sinyal (RSSI) dan jumlah berapa kali tag
+tersebut terbaca &mdash; keduanya digabung menjadi satu penilaian. Ambang batas persisnya sengaja
+tidak dipublikasikan dan tidak ditampilkan di aplikasi maupun dokumen ini.
+</div>
+</div>
+
+<!-- ===================== 5. MODE BARCODE ===================== -->
+<div class="chapter">
+<h2>5. Mode Barcode</h2>
+
+<p>Selain RFID, aplikasi ini juga bisa dipakai untuk memindai <b>barcode 1D/2D</b> menggunakan
+pemindai bawaan handheld. Mode ini diaktifkan dari menu <b>Pengaturan &rarr; Mode Scan</b>, dan
+secara default aplikasi berada dalam <b>Mode RFID</b>.</p>
+
+<div class="shot">
+  <img src="screenshots/settings-barcode-mode-selected.png" width="190" height="317">
+  <div class="cap">Mode Scan &mdash; tombol Barcode dipilih (berwarna ungu)</div>
+</div>
+
+<p>Saat Mode Barcode aktif, tampilan Layar Scan berubah warna menjadi aksen <b>ungu</b> agar
+operator langsung tahu mode mana yang sedang berjalan tanpa perlu membaca teks.</p>
+
+<h3>Cara pakai</h3>
+<div class="step"><span class="n">1</span> Buka <b>Pengaturan</b>, di bagian paling atas pilih <b>Mode Scan &rarr; Barcode</b>, lalu tekan <b>Simpan</b>.</div>
+<div class="step"><span class="n">2</span> Kembali ke Layar Scan &mdash; tampilan akan berubah menjadi tema ungu dengan ikon barcode.</div>
+<div class="step"><span class="n">3</span> Arahkan handheld ke barcode, lalu <b>tahan tombol trigger</b> seperti biasa hingga barcode terbaca.</div>
+<div class="step"><span class="n">4</span> Setiap barcode yang berhasil terbaca <b>langsung dikirim otomatis</b> ke server, satu per satu &mdash; tidak perlu menekan Stop terlebih dahulu.</div>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/scan-barcode-mode-empty.png" width="160" height="267"><div class="cap">Menunggu scan pertama</div></td>
+<td><img src="screenshots/scan-barcode-mode-results.png" width="160" height="267"><div class="cap">Hasil scan dengan status kirim</div></td>
+</tr>
+</table>
+
+<p>Setiap baris hasil pada Mode Barcode menampilkan kode yang terbaca, waktu scan, dan status
+pengiriman: <b>Mengirim&hellip;</b>, <b>Terkirim</b> (hijau), atau <b>Gagal</b> (merah).</p>
+
+<div class="note">
+<b>Perbedaan penting dengan Mode RFID:</b>
+<ul>
+<li>Pengaturan <b>Power</b> (kekuatan pancar RF) otomatis disembunyikan saat Mode Barcode aktif,
+karena tidak relevan untuk pemindaian barcode.</li>
+<li>Backup CSV lokal (Bab 8) <u>tidak</u> mencakup hasil Mode Barcode &mdash; backup itu khusus
+untuk sesi RFID, karena setiap barcode sudah langsung terkirim satu per satu, bukan
+dikumpulkan dulu.</li>
+</ul>
+</div>
+</div>
+
+<!-- ===================== 6. WO vs REGISTER ===================== -->
+<div class="chapter">
+<h2>6. Mode Pengiriman: WO vs Register</h2>
+
+<p>Terlepas dari Mode Scan (RFID/Barcode) di atas, ada satu pengaturan lagi yang menentukan
+<i>ke alur bisnis mana</i> hasil scan dikirim: <b>WO</b> atau <b>Register</b>. Diatur dari
+<b>Pengaturan &rarr; Mode</b>.</p>
+
+<div class="shot">
+  <img src="screenshots/settings-scan-mode-and-mode.png" width="190" height="317">
+  <div class="cap">Bagian Mode Scan (atas) dan Mode WO/Register (bawah) di Pengaturan</div>
+</div>
+
+<p>Kedua mode mengirim data dengan format yang sama persis ke server yang sama &mdash; server
+membedakannya lewat satu penanda di data yang dikirim, sehingga operator tidak perlu memikirkan
+perbedaan teknisnya.</p>
+
+<div class="tip">
+<b>Khusus Mode Register</b> muncul satu centang tambahan: <i>"Hasil scan langsung dikirim ke
+stok saat ini"</i>. Jika dicentang, hasil scan tersebut juga langsung memperbarui stok saat itu
+juga. Kotak centang ini tidak muncul sama sekali di Mode WO.
+</div>
+</div>
+
+<!-- ===================== 7. LATAR BELAKANG ===================== -->
+<div class="chapter">
+<h2>7. Scan Latar Belakang &amp; Bulatan Mengambang</h2>
+
+<p>Fitur ini <b>mati secara default</b>. Jika diaktifkan lewat <b>Pengaturan &rarr; Scan Latar
+Belakang</b>, dua hal berubah:</p>
+
+<div class="step"><span class="n">1</span> Tombol trigger fisik <b>tetap berfungsi</b> walau aplikasi tidak sedang dibuka di layar &mdash; misalnya sambil membuka Chrome atau aplikasi WMS lain. Jika fitur ini mati, trigger hanya berfungsi saat aplikasi sedang tampil di layar.</div>
+<div class="step"><span class="n">2</span> Muncul <b>bulatan status mengambang</b> di atas aplikasi lain. Bulatan ini bisa digeser ke mana saja, dan diketuk untuk langsung kembali ke aplikasi.</div>
+
+<p>Warna bulatan menunjukkan status tanpa perlu membaca teks:</p>
+
+<table class="ref">
+<tr><th>Warna</th><th>Artinya</th></tr>
+<tr><td>Abu-abu</td><td>Diam &mdash; tidak sedang scan</td></tr>
+<tr><td>Biru</td><td>Sedang scan &mdash; menampilkan jumlah tag unik yang sudah terbaca</td></tr>
+<tr><td>Hijau</td><td>Scan terakhir berhasil terkirim &mdash; menampilkan jumlah tag yang terkirim</td></tr>
+<tr><td>Merah</td><td>Scan terakhir gagal terkirim</td></tr>
+</table>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/floating-bubble-home.png" width="160" height="267"><div class="cap">Diam, di atas layar utama HP</div></td>
+<td><img src="screenshots/floating-bubble-scanning.png" width="160" height="267"><div class="cap">Sedang scan, jumlah tag berjalan</div></td>
+<td><img src="screenshots/floating-bubble-over-chrome.png" width="160" height="267"><div class="cap">Mengambang di atas Chrome</div></td>
+</tr>
+</table>
+
+<div class="note">
+Mengaktifkan fitur ini akan meminta izin Android <i>"Tampil di atas aplikasi lain"</i> &mdash;
+cukup disetujui satu kali per perangkat. Karena fitur ini menjalankan layanan latar belakang,
+akan selalu muncul notifikasi kecil <i>"Background scanning active"</i> di status bar selama
+fitur ini aktif &mdash; ini adalah ketentuan standar Android, bukan bug.
+</div>
+</div>
+
+<!-- ===================== 8. BACKUP CSV ===================== -->
+<div class="chapter">
+<h2>8. Backup CSV Lokal</h2>
+
+<p>Fitur ini <b>menyala secara default</b>, diatur lewat <b>Pengaturan &rarr; Backup Lokal</b>.
+Setiap kali sesi scan RFID berhenti &mdash; berhasil terkirim maupun tidak &mdash; seluruh daftar
+tag pada sesi tersebut otomatis disimpan ke file CSV di penyimpanan perangkat. Fitur ini adalah
+jaring pengaman apabila koneksi WiFi gudang sedang tidak stabil.</p>
+
+<p>File tersimpan otomatis di folder:</p>
+<p><code>Android/data/com.example.chainwayrfidbridge/files/rfid_stc/</code></p>
+
+<p>satu file per sesi scan, dengan nama <code>scan_YYYYMMDD_HHMMSS.csv</code>, berisi kolom:
+<code>epc, first_seen, last_seen, read_count, antenna, rssi, is_new</code>.</p>
+
+<div class="note">
+Backup ini hanya berlaku untuk sesi <b>Mode RFID</b>. Hasil <b>Mode Barcode</b> (Bab 5) tidak
+dibackup ke CSV karena setiap kode sudah langsung dikirim satu per satu ke server.
+</div>
+</div>
+
+<!-- ===================== 9. UPDATE OTOMATIS ===================== -->
+<div class="chapter">
+<h2>9. Update Aplikasi Otomatis</h2>
+
+<p>Aplikasi secara otomatis memeriksa versi terbaru setiap kali dibuka, dan setiap kembali ke
+layar depan (paling cepat setiap 5 menit sekali). Jika tersedia versi baru, muncul kartu
+notifikasi di Layar Scan:</p>
+
+<div class="shot">
+  <img src="screenshots/scan-quality-strong.png" width="190" height="317">
+  <div class="cap">Kartu "Update tersedia" muncul di bagian atas Layar Scan</div>
+</div>
+
+<div class="step"><span class="n">1</span> Tekan <b>Update Sekarang</b> untuk mengunduh versi terbaru.</div>
+<div class="step"><span class="n">2</span> Setelah selesai diunduh, tekan <b>Pasang</b> &mdash; ini akan membuka pemasang aplikasi bawaan Android.</div>
+<div class="step"><span class="n">3</span> Khusus pemasangan pertama kali di sebuah perangkat, Android mungkin menampilkan layar izin <i>"Izinkan pemasangan dari aplikasi ini"</i> &mdash; cukup disetujui satu kali, bukan setiap update.</div>
+
+<p>Tidak perlu laptop, kabel data, atau transfer APK manual &mdash; semua dilakukan langsung dari
+handheld lewat internet.</p>
+</div>
+
+<!-- ===================== 10. PENGATURAN ===================== -->
+<div class="chapter">
+<h2>10. Panduan Lengkap Pengaturan</h2>
+
+<p>Bab ini menjelaskan setiap bagian di menu <b>Pengaturan</b>, dari atas ke bawah. Bagian ini
+biasanya hanya perlu disentuh sekali oleh admin/IT saat konfigurasi awal sebuah handheld.</p>
+
+<h3>10.1 Mode Scan &amp; Mode</h3>
+<div class="shot">
+  <img src="screenshots/settings-scan-mode-and-mode.png" width="190" height="317">
+</div>
+<ul>
+<li><b>Mode Scan</b> &mdash; RFID / Barcode, lihat Bab 5</li>
+<li><b>Mode</b> &mdash; WO / Register, lihat Bab 6</li>
+</ul>
+
+<h3>10.2 Konfigurasi API</h3>
+<div class="shot">
+  <img src="screenshots/settings-api-config.png" width="190" height="317">
+</div>
+<ul>
+<li><b>Base URL</b> &mdash; alamat server WMS tujuan</li>
+<li><b>Endpoint</b> &mdash; jalur API tujuan, biasanya tidak perlu diubah</li>
+<li><b>Reader ID</b> &mdash; hanya-baca, dibuat otomatis dari perangkat sehingga setiap handheld
+punya ID unik tanpa perlu diatur manual</li>
+<li><b>Antenna</b> &mdash; nomor antena yang dipakai</li>
+</ul>
+
+<h3>10.3 Test Connection &amp; Register Configuration</h3>
+<div class="shot">
+  <img src="screenshots/settings-test-connection-register.png" width="190" height="317">
+</div>
+<ul>
+<li><b>Test Connection</b> &mdash; mengecek apakah alamat server bisa dihubungi</li>
+<li><b>Register Configuration</b> &mdash; RR Type, Maker Name, Initial Year, Factory Code
+(selalu dikirim ke server terlepas dari Mode WO/Register yang dipilih)</li>
+</ul>
+
+<h3>10.4 Power</h3>
+<div class="shot">
+  <img src="screenshots/settings-register-power.png" width="190" height="317">
+</div>
+<p>Mengatur kekuatan pancar RF reader. Rentang nilai mengikuti perangkat aslinya: Chainway
+1&ndash;30 dBm, Zebra 0&ndash;300 (sama seperti aplikasi resmi 123RFID milik Zebra). Bagian ini
+otomatis disembunyikan saat Mode Barcode aktif.</p>
+
+<h3>10.5 Suara</h3>
+<div class="shot">
+  <img src="screenshots/settings-power-sound.png" width="190" height="317">
+</div>
+<p>Bunyi setiap kali tag/barcode berhasil terbaca, bisa dimatikan, lengkap dengan pengatur
+volume.</p>
+
+<h3>10.6 Backup Lokal, Scan Latar Belakang &amp; Bahasa</h3>
+<div class="shot">
+  <img src="screenshots/settings-backup-bgscan-lang.png" width="190" height="317">
+</div>
+<p>Lihat Bab 7, Bab 8, dan Bab 11 untuk penjelasan masing-masing.</p>
+
+<h3>10.7 Reset &amp; Simpan</h3>
+<div class="shot">
+  <img src="screenshots/settings-lang-reset-save.png" width="190" height="317">
+</div>
+<ul>
+<li><b>Reset</b> &mdash; mengembalikan semua pengaturan di atas ke nilai bawaan (tidak pernah
+mengubah pilihan jenis perangkat atau bahasa)</li>
+<li><b>Simpan</b> &mdash; memvalidasi lalu menyimpan seluruh perubahan; versi aplikasi yang
+terpasang ditampilkan tepat di bawah tombol ini</li>
+</ul>
+</div>
+
+<!-- ===================== 11. BAHASA ===================== -->
+<div class="chapter">
+<h2>11. Bahasa Aplikasi</h2>
+
+<p>Tersedia dalam Bahasa Indonesia dan Inggris, bisa diganti kapan saja lewat menu Pengaturan,
+dan berlaku instan ke seluruh layar &mdash; termasuk notifikasi dan pesan validasi. Secara
+bawaan, aplikasi terpasang dalam Bahasa Inggris hingga diganti manual.</p>
+</div>
+
+<!-- ===================== 12. TROUBLESHOOTING ===================== -->
+<div class="chapter">
+<h2>12. Pemecahan Masalah (Troubleshooting)</h2>
+
+<table class="ref">
+<tr><th>Gejala</th><th>Penjelasan &amp; solusi</th></tr>
+<tr>
+<td>Muncul pesan error terkait <i>charging</i> saat scan RFID (khusus Zebra)</td>
+<td>Sebagian unit Zebra menolak memulai scan RFID saat merasa sedang di-charge, termasuk saat
+tersambung ke dock USB/adb. Ini bukan bug &mdash; lepas dari charger lalu coba lagi.</td>
+</tr>
+<tr>
+<td>Laser barcode ikut menyala saat scan RFID (khusus Zebra)</td>
+<td>Mesin barcode DataWedge milik Zebra kadang mengambil alih tombol trigger saat aplikasi lain
+yang punya profil DataWedge sendiri (mis. browser) tampil di depan. Aplikasi ini otomatis
+menonaktifkan DataWedge setiap kali Mode RFID aktif. Jika terus berulang di satu unit tertentu,
+laporkan ke tim IT sebagai kemungkinan masalah profil DataWedge di unit tersebut.</td>
+</tr>
+<tr>
+<td>Trigger memicu pemindai barcode (lampu menyala, berhasil membaca) tapi hasilnya tidak
+pernah muncul di aplikasi (Mode Barcode, khusus Zebra)</td>
+<td>Ini adalah masalah konfigurasi profil DataWedge di sistem &mdash; hasil scan terkirim ke
+profil lain, bukan ke aplikasi ini. Laporkan ke tim IT; solusinya bersifat teknis di sisi
+sistem, bukan sesuatu yang bisa diperbaiki operator sendiri di lapangan.</td>
+</tr>
+<tr>
+<td>Update tidak mau terpasang</td>
+<td>Bisa terjadi jika perangkat pernah dipasangi APK versi uji coba/manual oleh tim IT. Hubungi
+tim IT untuk memasang ulang aplikasi ke versi resmi.</td>
+</tr>
+<tr>
+<td>Unduhan update terhenti/timeout</td>
+<td>Aplikasi mengunduh file update (beberapa MB) lewat jaringan handheld; pada WiFi gudang yang
+lambat, percobaan pertama kadang gagal. Tekan <b>Update Sekarang</b> sekali lagi untuk mencoba
+ulang.</td>
+</tr>
+</table>
+
+<div class="footer-note">
+Stechoq RFID Suite &mdash; Buku Panduan Penggunaan &bull; Dokumen ini dibuat untuk keperluan
+internal dan akan diperbarui mengikuti perkembangan aplikasi.
+</div>
+</div>
+
+</body>
+</html>

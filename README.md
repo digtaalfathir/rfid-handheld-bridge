@@ -12,6 +12,8 @@ This document is both a user guide (what every screen and setting does) and a de
 - [Overview](#overview)
 - [First launch: choosing your device](#first-launch-choosing-your-device)
 - [The Scan screen](#the-scan-screen)
+- [Signal Quality](#signal-quality)
+- [Barcode mode](#barcode-mode)
 - [Sending scans: WO vs Register mode](#sending-scans-wo-vs-register-mode)
 - [Background scanning & the floating bubble](#background-scanning--the-floating-bubble)
 - [Local CSV backup](#local-csv-backup)
@@ -24,7 +26,9 @@ This document is both a user guide (what every screen and setting does) and a de
 ## Overview
 
 - Continuous multi-tag UHF inventory scanning, hold-to-scan via the handheld's physical trigger
-- Live tag table: EPC, read count, RSSI, antenna, new-vs-already-seen, last-seen time
+- Live tag table: EPC, read count, a plain-language Quality indicator, new-vs-already-seen badge
+- A second scan mode for 1D/2D barcodes, switchable in Settings — the same trigger drives a
+  barcode engine instead of the RFID reader, and each decode sends immediately
 - One shared payload format posted to your API regardless of mode (WO or Register)
 - Works whether the app is in the foreground or backgrounded — a small floating status bubble
   keeps the operator informed while browsing something else
@@ -58,14 +62,60 @@ The main screen, and the only one an operator needs day to day.
 - **Send status** — after a scan stops, the collected tags post to your API automatically; a
   banner shows Sending → Sent (n tags) or a Retry button on failure
 
-![Scan screen with results — summary card, Sent banner, New Scan / Continue](docs/screenshots/scan-with-tags.png)
+- **Tag list** — sorted and searchable; each row shows the EPC, read count (`R:`), a **Quality**
+  label, and a **NEW** / **EXISTING** badge (whether this tag was already in the list before the
+  current scan session started). Tap the copy icon on a row to copy its EPC.
+- **Search & sort** — filter by EPC substring; sort by most recent, EPC (A–Z), read count, or Quality
 
-- **Tag list** — sorted and searchable; each row shows the EPC, read count, RSSI, antenna, and a
-  **NEW** / **EXISTING** badge (whether this tag was already in the list before the current scan
-  session started). Tap the copy icon on a row to copy its EPC.
-- **Search & sort** — filter by EPC substring; sort by most recent, EPC (A–Z), read count, or RSSI
+![Tag row showing read count and a Strong-quality tag](docs/screenshots/scan-quality-strong.png)
 
-![Tag rows showing the NEW badge on a freshly-seen tag](docs/screenshots/scan-tags-new-badge.png)
+## Signal Quality
+
+RSSI, antenna number, and last-seen time used to be shown directly on every row — operators found
+the raw dBm number meaningless without training, so it's been replaced with a plain **Quality**
+label: **Strong**, **Medium**, or **Weak**, color-coded green/amber/red.
+
+<table>
+<tr>
+<td><img src="docs/screenshots/scan-quality-strong.png" alt="Strong quality tag, green" /><br/><sub>Strong (green)</sub></td>
+<td><img src="docs/screenshots/scan-quality-medium.png" alt="Medium quality tag, amber" /><br/><sub>Medium (amber)</sub></td>
+<td><img src="docs/screenshots/scan-quality-weak.png" alt="Weak quality tag, red" /><br/><sub>Weak (red)</sub></td>
+</tr>
+</table>
+
+The classification is computed from the tag's RSSI and read count together — a tag caught only
+once is treated as one tier weaker than its RSSI alone would suggest, since a single read hasn't
+demonstrated a stable link the way repeated reads have. The exact thresholds are intentionally not
+documented here or exposed anywhere in the app; see the comment on `TagQuality.kt` in the source
+if you need to tune them.
+
+## Barcode mode
+
+A second scan mode, alongside RFID, for reading 1D/2D barcodes instead of UHF tags. Switchable in
+Settings → Scan Mode (defaults to RFID). Selecting Barcode changes what the physical trigger does
+and gives the Scan screen a distinct purple-accented layout so it's obvious at a glance which mode
+is active:
+
+![Barcode mode selected in Settings, purple accent](docs/screenshots/settings-barcode-mode-selected.png)
+
+- **The trigger drives the barcode scanner, not the RFID reader** — hold it to read a barcode the
+  same way you'd hold it for an RFID scan
+- **Each decoded barcode sends immediately**, one at a time, using the exact same payload shape as
+  an RFID batch send — there's no "stop scan" step to collect a batch first
+- Every scan shows in a list with its send status: **Sending → Sent** or **Failed**
+
+<table>
+<tr>
+<td><img src="docs/screenshots/scan-barcode-mode-empty.png" alt="Barcode mode, empty, waiting for a scan" /><br/><sub>Waiting for a scan</sub></td>
+<td><img src="docs/screenshots/scan-barcode-mode-results.png" alt="Barcode mode with three scanned codes, Sent/Failed status" /><br/><sub>Scanned codes with status</sub></td>
+</tr>
+</table>
+
+Because RF transmit power has no meaning for barcode scanning, the Power section in Settings is
+hidden entirely while Barcode mode is selected (see [Settings reference](#settings-reference)).
+
+Barcode scans are **not** written to the local CSV backup — that safety net covers RFID sessions
+only, since each barcode already posts individually and immediately instead of batching.
 
 ## Sending scans: WO vs Register mode
 
@@ -74,10 +124,10 @@ shape** — a `mode` field in the payload (`"wo"` or `"register"`) is what tells
 flow it is. See [API payload](#api-payload) for the exact fields.
 
 **Register mode only** adds one extra control: a checkbox, *"Scan result is sent to current
-stock"* — when checked, the payload's `opname` field is `true`, tellhing the backend this scan
+stock"* — when checked, the payload's `opname` field is `true`, telling the backend this scan
 should also post straight to current stock. It's hidden entirely in WO mode.
 
-![Register mode selected, revealing the "opname" checkbox](docs/screenshots/settings-mode-register-opname.png)
+![Register mode selected, revealing the "opname" checkbox](docs/screenshots/settings-scan-mode-and-mode.png)
 
 ## Background scanning & the floating bubble
 
@@ -139,43 +189,50 @@ new versions get published in the first place.
 
 ## Settings reference
 
-Every section, top to bottom:
+Every section, top to bottom, each with its own icon:
 
-![Mode and API Configuration](docs/screenshots/settings-mode-api.png)
+- **Scan Mode** — RFID / Barcode toggle described in [Barcode mode](#barcode-mode) above; the
+  selected option's icon turns purple when Barcode is active
+- **Mode** — WO / Register toggle; Register mode reveals the "opname" checkbox described earlier
 
-- **Mode** — WO / Register toggle; Register mode reveals the "opname" checkbox described above
+![Scan Mode and Mode sections](docs/screenshots/settings-scan-mode-and-mode.png)
+
 - **API Configuration**
   - **Base URL** — editable dropdown, remembers anything you type
   - **Endpoint** — editable dropdown, defaults to the shared endpoint; independent of Mode
   - **Reader ID** — read-only, auto-derived from the device (`<model>-<short Android ID>`) so
     every handheld in a fleet gets a unique, human-readable ID with zero per-device setup
   - **Antenna** — editable dropdown
+
+![API Configuration section](docs/screenshots/settings-api-config.png)
+
   - **Test Connection** — pings the configured URL and reports whether it's reachable
-
-![Reader ID, Antenna, Test Connection](docs/screenshots/settings-reader-antenna-test.png)
-
 - **Register Configuration** — RR Type, Maker Name, Initial Year, and Factory Code, all editable
   dropdowns that remember custom entries (always sent regardless of mode, since the payload shape
   is shared)
 
-![Register Configuration section](docs/screenshots/settings-register-config.png)
+![Test Connection button and Register Configuration](docs/screenshots/settings-test-connection-register.png)
 
 - **Power** — native range per vendor, not an abstracted scale: **Chainway 1–30 dBm**, **Zebra
-  0–300** (matching Zebra's own 123RFID app's units directly)
+  0–300** (matching Zebra's own 123RFID app's units directly). **Hidden entirely in Barcode mode**,
+  since RF transmit power has no meaning there.
+
+![End of Register Configuration and start of Power](docs/screenshots/settings-register-power.png)
+
 - **Sound** — beep on tag read, on/off, plus a volume slider when enabled
 
-![Power slider and Sound settings](docs/screenshots/settings-power-sound-backup.png)
+![Power slider and Sound settings](docs/screenshots/settings-power-sound.png)
 
-- **Local Backup** — the CSV toggle described above
+- **Local Backup** — the CSV toggle described above (RFID sessions only)
 - **Background Scanning** — the floating-bubble toggle described above
-
-![Local Backup and Background Scanning toggles](docs/screenshots/settings-backup-bgscan.png)
-
 - **Language** — English / Indonesian, applied instantly, independent of the rest of Settings
+
+![Local Backup, Background Scanning, and Language](docs/screenshots/settings-backup-bgscan-lang.png)
+
 - **Reset** — clears everything above back to defaults (never touches device type or language)
 - **Save** — validates and persists; the app's current version is shown just below this row
 
-![Language switch, Reset/Save, and the version footer](docs/screenshots/settings-language-background.png)
+![Language, Reset/Save, and the version footer](docs/screenshots/settings-lang-reset-save.png)
 
 ## Language
 
@@ -188,17 +245,24 @@ string table, so nothing drifts out of sync between languages.
 - **"RFID_CHARGING_COMMAND_NOT_ALLOWED" on Zebra** — some Zebra units refuse to start an RFID
   scan while they believe they're charging, which includes sitting in a powered USB/adb cradle for
   development. Not a bug — unplug and test normally.
-- **Barcode laser fires alongside RFID on Zebra** — Zebra's DataWedge barcode engine can reclaim
-  the physical trigger when a "real" app (one with its own DataWedge profile, e.g. a browser)
-  comes to the foreground. The app disables DataWedge's scanner plugin on connect and
-  re-asserts RFID trigger mode on every background transition and periodically while
-  backgrounded; if it ever recurs, it's a DataWedge profile issue on that specific unit.
+- **Barcode laser fires alongside RFID on Zebra (in RFID mode)** — Zebra's DataWedge barcode
+  engine can reclaim the physical trigger when a "real" app (one with its own DataWedge profile,
+  e.g. a browser) comes to the foreground. The app disables DataWedge's scanner plugin whenever
+  RFID mode is active and re-asserts the currently-selected trigger mode on every foreground/
+  background transition; if it ever recurs, it's a DataWedge profile issue on that specific unit.
 - **Update won't install on a device you tested with a local/manual build** — Android refuses to
   install an "update" with an equal-or-lower `versionCode` than what's already there. This only
   matters if you've been sideloading manual builds outside the normal CI pipeline.
 - **Update download times out** — the in-app updater downloads the APK itself (a few MB) over
   whatever network the handheld has; on slow warehouse WiFi the first attempt can occasionally
   time out. Tapping Update Now again retries cleanly.
+- **Barcode mode on Zebra: trigger scans but nothing shows up in the app** — the scan engine
+  decoded successfully but DataWedge routed the result to a different profile's default keystroke
+  output, which a focus-less Compose screen silently swallows. The app now force-activates its own
+  DataWedge profile (`SWITCH_TO_PROFILE`) after configuring it, rather than relying on automatic
+  foreground-app association — if this ever recurs, check the DataWedge app itself to confirm the
+  `StechoqRFIDSuiteBarcode` profile exists, is enabled, and its Intent Output config matches
+  `ZebraBarcodeManager.kt`.
 
 ## For developers
 
@@ -215,13 +279,20 @@ app/src/main/java/com/example/chainwayrfidbridge/
 │   ├── ConfigRepository.kt      # SharedPreferences (resettable config vs. device-level prefs)
 │   ├── DeviceType.kt            # Chainway | Zebra, incl. each vendor's native power range
 │   ├── AppLanguage.kt           # EN | ID
+│   ├── InputMode.kt             # RFID | Barcode, persisted per device
+│   ├── TagQuality.kt            # Strong/Medium/Weak classification from RSSI + read count
+│   ├── BarcodeScanRecord.kt     # One decoded barcode + its send status
 │   └── TagRecord.kt
 ├── rfid/
 │   ├── RfidReaderManager.kt     # Vendor-agnostic interface both backends implement
 │   ├── ChainwayReaderManager.kt # RFIDWithUHFUART push-callback backend
-│   └── ZebraReaderManager.kt    # RFID API3 backend
+│   └── ZebraReaderManager.kt    # RFID API3 backend; also owns DataWedge trigger handoff
+├── barcode/
+│   ├── BarcodeReaderManager.kt  # Vendor-agnostic barcode capture interface
+│   ├── ChainwayBarcodeManager.kt# com.rscja.barcode.BarcodeDecoder push-callback backend
+│   └── ZebraBarcodeManager.kt   # DataWedge profile + intent-output receiver
 ├── network/
-│   ├── ApiClient.kt             # POSTs scanned tags to the configured endpoint
+│   ├── ApiClient.kt             # POSTs scanned tags/barcodes to the configured endpoint
 │   └── UpdateClient.kt          # GitHub Releases version check + APK download
 ├── service/
 │   ├── ScanStateBus.kt          # Shared scan-state mirror (Service has no ViewModel of its own)
@@ -322,6 +393,9 @@ shared default):
   "factory_code": "..."
 }
 ```
+
+Barcode mode posts the exact same shape — `idHex` just contains a single code instead of a batch,
+since each scan sends immediately rather than waiting for a stop-scan to collect several.
 
 `reader_id` is derived automatically from the device (`<model>-<short Android ID>`), never typed
 by hand — every handheld in a fleet gets a unique, readable ID with no per-device setup.
