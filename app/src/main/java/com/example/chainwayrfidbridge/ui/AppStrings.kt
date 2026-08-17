@@ -4,6 +4,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import com.example.chainwayrfidbridge.SortOption
 import com.example.chainwayrfidbridge.data.AppLanguage
 import com.example.chainwayrfidbridge.data.DeviceType
+import com.example.chainwayrfidbridge.data.InputMode
+import com.example.chainwayrfidbridge.data.TagQuality
 import com.example.chainwayrfidbridge.data.ValidationErrorType
 
 /**
@@ -45,7 +47,11 @@ data class AppStrings(
     val sortLastSeen: String,
     val sortEpcAsc: String,
     val sortReadCount: String,
-    val sortRssi: String,
+    val sortQuality: String,
+    val qualityLabel: String,
+    val qualityStrong: String,
+    val qualityMedium: String,
+    val qualityWeak: String,
     val updateAvailablePrefix: String,
     val updateNowButton: String,
     val downloadingUpdate: String,
@@ -53,9 +59,20 @@ data class AppStrings(
     val installUpdateButton: String,
     val updateErrorPrefix: String,
 
+    // Barcode mode
+    val barcodeEmptyList: String,
+    val barcodeHint: String,
+    val barcodeSendingLabel: String,
+    val barcodeSentLabel: String,
+    val barcodeFailedLabel: String,
+    val totalScanned: String,
+
     // Settings screen
     val settingsTitle: String,
     val backDescription: String,
+    val scanModeTitle: String,
+    val scanModeRfidLabel: String,
+    val scanModeBarcodeLabel: String,
     val modeTitle: String,
     val apiConfigTitle: String,
     val baseUrlLabel: String,
@@ -118,7 +135,18 @@ data class AppStrings(
         SortOption.LAST_SEEN_DESC -> sortLastSeen
         SortOption.EPC_ASC -> sortEpcAsc
         SortOption.READ_COUNT_DESC -> sortReadCount
-        SortOption.RSSI_DESC -> sortRssi
+        SortOption.QUALITY_DESC -> sortQuality
+    }
+
+    fun qualityText(quality: TagQuality): String = when (quality) {
+        TagQuality.STRONG -> qualityStrong
+        TagQuality.MEDIUM -> qualityMedium
+        TagQuality.WEAK -> qualityWeak
+    }
+
+    fun scanModeLabel(mode: InputMode): String = when (mode) {
+        InputMode.RFID -> scanModeRfidLabel
+        InputMode.BARCODE -> scanModeBarcodeLabel
     }
 
     fun validationMessage(type: ValidationErrorType): String = when (type) {
@@ -167,7 +195,11 @@ val EnglishStrings = AppStrings(
     sortLastSeen = "Most Recent",
     sortEpcAsc = "EPC A-Z",
     sortReadCount = "Read Count",
-    sortRssi = "RSSI",
+    sortQuality = "Quality",
+    qualityLabel = "Quality: ",
+    qualityStrong = "Strong",
+    qualityMedium = "Medium",
+    qualityWeak = "Weak",
     updateAvailablePrefix = "Update available: v",
     updateNowButton = "Update Now",
     downloadingUpdate = "Downloading update...",
@@ -175,8 +207,18 @@ val EnglishStrings = AppStrings(
     installUpdateButton = "Install",
     updateErrorPrefix = "Update failed: ",
 
+    barcodeEmptyList = "No barcodes scanned yet",
+    barcodeHint = "Hold the trigger to scan a barcode",
+    barcodeSendingLabel = "Sending...",
+    barcodeSentLabel = "Sent",
+    barcodeFailedLabel = "Failed",
+    totalScanned = "Total Scanned",
+
     settingsTitle = "Settings",
     backDescription = "Back",
+    scanModeTitle = "Scan Mode",
+    scanModeRfidLabel = "RFID",
+    scanModeBarcodeLabel = "Barcode",
     modeTitle = "Mode",
     apiConfigTitle = "API Configuration",
     baseUrlLabel = "Base URL",
@@ -256,7 +298,11 @@ val IndonesianStrings = AppStrings(
     sortLastSeen = "Terbaru",
     sortEpcAsc = "EPC A-Z",
     sortReadCount = "Read Count",
-    sortRssi = "RSSI",
+    sortQuality = "Kualitas",
+    qualityLabel = "Kualitas: ",
+    qualityStrong = "Kuat",
+    qualityMedium = "Sedang",
+    qualityWeak = "Lemah",
     updateAvailablePrefix = "Update tersedia: v",
     updateNowButton = "Update Sekarang",
     downloadingUpdate = "Mengunduh update...",
@@ -264,8 +310,18 @@ val IndonesianStrings = AppStrings(
     installUpdateButton = "Pasang",
     updateErrorPrefix = "Update gagal: ",
 
+    barcodeEmptyList = "Belum ada barcode discan",
+    barcodeHint = "Tahan trigger untuk scan barcode",
+    barcodeSendingLabel = "Mengirim...",
+    barcodeSentLabel = "Terkirim",
+    barcodeFailedLabel = "Gagal",
+    totalScanned = "Total Discan",
+
     settingsTitle = "Pengaturan",
     backDescription = "Kembali",
+    scanModeTitle = "Mode Scan",
+    scanModeRfidLabel = "RFID",
+    scanModeBarcodeLabel = "Barcode",
     modeTitle = "Mode",
     apiConfigTitle = "Konfigurasi API",
     baseUrlLabel = "Base URL",

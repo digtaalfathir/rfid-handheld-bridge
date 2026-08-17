@@ -13,6 +13,7 @@ enum class ScanMode(val key: String, val label: String) {
 
 data class ScanConfig(
     val mode: ScanMode = ScanMode.WO,
+    val inputMode: InputMode = InputMode.RFID,
     val baseUrl: String = "",
     val endpoint: String = "/api/v1/warehouse-management/jmp/log-rfids/components/handheld",
     val readerId: String = "C72",

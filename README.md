@@ -74,7 +74,7 @@ shape** — a `mode` field in the payload (`"wo"` or `"register"`) is what tells
 flow it is. See [API payload](#api-payload) for the exact fields.
 
 **Register mode only** adds one extra control: a checkbox, *"Scan result is sent to current
-stock"* — when checked, the payload's `opname` field is `true`, telling the backend this scan
+stock"* — when checked, the payload's `opname` field is `true`, tellhing the backend this scan
 should also post straight to current stock. It's hidden entirely in WO mode.
 
 ![Register mode selected, revealing the "opname" checkbox](docs/screenshots/settings-mode-register-opname.png)
@@ -270,9 +270,9 @@ always overrides both via `-PappVersionCode=`/`-PappVersionName=` — see below.
 `.github/workflows/release.yml` builds, tests, signs, tags, and publishes a GitHub Release on
 every push to `main` — no manual build or upload step, ever. Each run:
 
-1. Computes a version from the run number (`versionCode = <run number> + 100`, `versionName =
-   1.2.<run number>`) — always increasing, which Android requires for an update to install over
-   the previous version, without ever hand-editing `build.gradle`. The `+100` offset keeps CI's
+1. Computes a version from the run number (`versionCode = <run number> + 1000`, `versionName =
+   1.3.<run number>`) — always increasing, which Android requires for an update to install over
+   the previous version, without ever hand-editing `build.gradle`. The `+1000` offset keeps CI's
    versionCode safely clear of anything used during local/manual testing.
 2. Builds and unit-tests the release APK with that version baked in.
 3. Signs it with the same keystore every already-deployed handheld was signed with — using a

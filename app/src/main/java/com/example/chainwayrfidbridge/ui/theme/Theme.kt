@@ -17,6 +17,9 @@ val LightGrayBackground = Color(0xFFF4F6F9)
 val SurfaceGray = Color(0xFFEDF1F6)
 val SuccessGreen = Color(0xFF2E7D32)
 val ErrorRed = Color(0xFFC62828)
+val WarningAmber = Color(0xFFEF6C00)
+// Deliberately distinct from BluePrimary (RFID) — the main visual cue that Barcode mode is active.
+val BarcodeAccent = Color(0xFF6A1B9A)
 val NewTagHighlight = Color(0xFFE3F2FD)
 
 private val LightColors = lightColorScheme(

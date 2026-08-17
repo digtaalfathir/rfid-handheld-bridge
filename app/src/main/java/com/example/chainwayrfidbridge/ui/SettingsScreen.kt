@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,10 +20,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +57,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,9 +66,11 @@ import androidx.compose.ui.unit.dp
 import com.example.chainwayrfidbridge.BuildConfig
 import com.example.chainwayrfidbridge.ScanViewModel
 import com.example.chainwayrfidbridge.data.AppLanguage
+import com.example.chainwayrfidbridge.data.InputMode
 import com.example.chainwayrfidbridge.data.ScanConfig
 import com.example.chainwayrfidbridge.data.ScanMode
 import com.example.chainwayrfidbridge.data.ValidationErrorType
+import com.example.chainwayrfidbridge.ui.theme.BarcodeAccent
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,7 +113,38 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            SectionCard(title = strings.modeTitle) {
+            SectionCard(
+                title = strings.scanModeTitle,
+                icon = Icons.Filled.QrCodeScanner,
+                accent = if (draft.inputMode == InputMode.BARCODE) BarcodeAccent else null
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    InputMode.entries.forEach { inputMode ->
+                        val selected = draft.inputMode == inputMode
+                        if (selected) {
+                            Button(
+                                onClick = { draft = draft.copy(inputMode = inputMode) },
+                                modifier = Modifier.weight(1f),
+                                colors = if (inputMode == InputMode.BARCODE) {
+                                    ButtonDefaults.buttonColors(containerColor = BarcodeAccent)
+                                } else {
+                                    ButtonDefaults.buttonColors()
+                                }
+                            ) {
+                                Text(strings.scanModeLabel(inputMode))
+                            }
+                        } else {
+                            OutlinedButton(onClick = { draft = draft.copy(inputMode = inputMode) }, modifier = Modifier.weight(1f)) {
+                                Text(strings.scanModeLabel(inputMode))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            SectionCard(title = strings.modeTitle, icon = Icons.Filled.SwapHoriz) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ScanMode.entries.forEach { mode ->
                         val selected = draft.mode == mode
@@ -128,7 +174,7 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = strings.apiConfigTitle) {
+            SectionCard(title = strings.apiConfigTitle, icon = Icons.Filled.Cloud) {
                 DropdownField(strings.baseUrlLabel, draft.baseUrl, baseUrlOptions, errors["baseUrl"]?.let(strings::validationMessage)) {
                     draft = draft.copy(baseUrl = it)
                 }
@@ -170,7 +216,7 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = strings.registerConfigTitle) {
+            SectionCard(title = strings.registerConfigTitle, icon = Icons.Filled.Description) {
                 DropdownField(strings.rrTypeLabel, draft.rrType, rrTypeOptions, errors["rrType"]?.let(strings::validationMessage)) {
                     draft = draft.copy(rrType = it)
                 }
@@ -190,19 +236,23 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = strings.powerTitle) {
-                Text("${strings.powerLevelPrefix}${draft.power}", style = MaterialTheme.typography.bodyMedium)
-                Slider(
-                    value = draft.power.toFloat(),
-                    onValueChange = { draft = draft.copy(power = it.roundToInt()) },
-                    valueRange = powerRange.first.toFloat()..powerRange.last.toFloat(),
-                    steps = powerRange.last - powerRange.first - 1
-                )
+            // RF transmit power has no meaning for barcode scanning — hidden rather than shown
+            // disabled, since it'd otherwise be dead weight on every Barcode-mode settings visit.
+            if (draft.inputMode == InputMode.RFID) {
+                SectionCard(title = strings.powerTitle, icon = Icons.Filled.Bolt) {
+                    Text("${strings.powerLevelPrefix}${draft.power}", style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = draft.power.toFloat(),
+                        onValueChange = { draft = draft.copy(power = it.roundToInt()) },
+                        valueRange = powerRange.first.toFloat()..powerRange.last.toFloat(),
+                        steps = powerRange.last - powerRange.first - 1
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            SectionCard(title = strings.soundTitle) {
+            SectionCard(title = strings.soundTitle, icon = Icons.Filled.VolumeUp) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -224,7 +274,7 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = strings.localCsvTitle) {
+            SectionCard(title = strings.localCsvTitle, icon = Icons.Filled.Backup) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -242,7 +292,7 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = strings.backgroundScanTitle) {
+            SectionCard(title = strings.backgroundScanTitle, icon = Icons.Filled.Layers) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -274,7 +324,7 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            SectionCard(title = strings.languageTitle) {
+            SectionCard(title = strings.languageTitle, icon = Icons.Filled.Language) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AppLanguage.entries.forEach { lang ->
                         val label = if (lang == AppLanguage.EN) strings.languageEnglish else strings.languageIndonesian
@@ -339,10 +389,16 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SectionCard(title: String, content: @Composable () -> Unit) {
+private fun SectionCard(title: String, icon: ImageVector? = null, accent: Color? = null, content: @Composable () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(icon, contentDescription = null, tint = accent ?: MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
             Spacer(Modifier.height(12.dp))
             content()
         }

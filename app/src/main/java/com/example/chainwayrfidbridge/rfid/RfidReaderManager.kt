@@ -1,6 +1,7 @@
 package com.example.chainwayrfidbridge.rfid
 
 import android.content.Context
+import com.example.chainwayrfidbridge.data.InputMode
 
 /**
  * Vendor-agnostic contract for a UHF reader backend. ScanViewModel talks only to this
@@ -54,4 +55,13 @@ interface RfidReaderManager {
      * press (with background scanning enabled) fires the barcode laser too. No-op by default.
      */
     fun onBackground() {}
+
+    /**
+     * Tells the backend which physical-trigger consumer should currently own the trigger. Only
+     * meaningful where RFID and barcode compete for the same physical trigger (Zebra, via
+     * DataWedge) — a no-op default covers Chainway, where the two are independent hardware paths
+     * needing no arbitration. Also remembered so onForeground()/onBackground() reassert whichever
+     * mode is actually active instead of always assuming RFID.
+     */
+    fun setInputMode(mode: InputMode) {}
 }

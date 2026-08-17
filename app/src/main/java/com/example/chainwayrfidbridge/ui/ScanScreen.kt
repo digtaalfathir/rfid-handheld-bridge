@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
@@ -43,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,10 +67,16 @@ import com.example.chainwayrfidbridge.ScanViewModel
 import com.example.chainwayrfidbridge.SendStatus
 import com.example.chainwayrfidbridge.SortOption
 import com.example.chainwayrfidbridge.UpdateStatus
+import com.example.chainwayrfidbridge.data.BarcodeScanRecord
+import com.example.chainwayrfidbridge.data.BarcodeSendStatus
+import com.example.chainwayrfidbridge.data.InputMode
+import com.example.chainwayrfidbridge.data.TagQuality
 import com.example.chainwayrfidbridge.data.TagRecord
+import com.example.chainwayrfidbridge.ui.theme.BarcodeAccent
 import com.example.chainwayrfidbridge.ui.theme.ErrorRed
 import com.example.chainwayrfidbridge.ui.theme.NewTagHighlight
 import com.example.chainwayrfidbridge.ui.theme.SuccessGreen
+import com.example.chainwayrfidbridge.ui.theme.WarningAmber
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -78,9 +86,11 @@ import java.util.Locale
 @Composable
 fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
+    val config by viewModel.config.collectAsState()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val strings = LocalStrings.current
+    val isBarcodeMode = config.inputMode == InputMode.BARCODE
 
     Scaffold(
         topBar = {
@@ -90,6 +100,13 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = strings.settingsDescription)
                     }
+                },
+                // Distinct accent color is the main visual cue that Barcode mode is active,
+                // since the two modes otherwise share the same screen chrome.
+                colors = if (isBarcodeMode) {
+                    TopAppBarDefaults.topAppBarColors(containerColor = BarcodeAccent.copy(alpha = 0.12f))
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
                 }
             )
         }
@@ -109,46 +126,147 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
             }
 
-            SummaryCard(
-                state = state,
-                onToggleScan = { viewModel.toggleScan() },
-                onStartNew = { viewModel.startNewScan() },
-                onRetrySend = { viewModel.retrySend() }
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            SearchSortRow(
-                query = state.searchQuery,
-                onQueryChange = viewModel::setSearchQuery,
-                sortOption = state.sortOption,
-                onSortChange = viewModel::setSortOption
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            if (state.tags.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(
-                        strings.emptyTagList,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(32.dp)
-                    )
-                }
+            if (isBarcodeMode) {
+                BarcodeScanBody(state = state, onCopy = { code ->
+                    clipboard.setText(AnnotatedString(code))
+                    Toast.makeText(context, strings.epcCopiedToast, Toast.LENGTH_SHORT).show()
+                })
             } else {
-                val listState = rememberLazyListState()
-                LaunchedEffect(state.tags.firstOrNull()?.epc) {
-                    if (state.tags.isNotEmpty()) listState.animateScrollToItem(0)
-                }
-                LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(state.tags, key = { it.epc }) { tag ->
-                        TagRow(tag) { epc ->
-                            clipboard.setText(AnnotatedString(epc))
-                            Toast.makeText(context, strings.epcCopiedToast, Toast.LENGTH_SHORT).show()
+                SummaryCard(
+                    state = state,
+                    onToggleScan = { viewModel.toggleScan() },
+                    onStartNew = { viewModel.startNewScan() },
+                    onRetrySend = { viewModel.retrySend() }
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                SearchSortRow(
+                    query = state.searchQuery,
+                    onQueryChange = viewModel::setSearchQuery,
+                    sortOption = state.sortOption,
+                    onSortChange = viewModel::setSortOption
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                if (state.tags.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(
+                            strings.emptyTagList,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(32.dp)
+                        )
+                    }
+                } else {
+                    val listState = rememberLazyListState()
+                    LaunchedEffect(state.tags.firstOrNull()?.epc) {
+                        if (state.tags.isNotEmpty()) listState.animateScrollToItem(0)
+                    }
+                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(state.tags, key = { it.epc }) { tag ->
+                            TagRow(tag) { epc ->
+                                clipboard.setText(AnnotatedString(epc))
+                                Toast.makeText(context, strings.epcCopiedToast, Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun BarcodeScanBody(state: ScanUiState, onCopy: (String) -> Unit) {
+    val strings = LocalStrings.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = BarcodeAccent.copy(alpha = 0.08f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.QrCodeScanner, contentDescription = null, tint = BarcodeAccent)
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(strings.totalScanned, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        state.barcodeScans.size.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                strings.barcodeHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    Spacer(Modifier.height(12.dp))
+
+    if (state.barcodeScans.isEmpty()) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text(
+                strings.barcodeEmptyList,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(32.dp)
+            )
+        }
+    } else {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(state.barcodeScans, key = { it.timestamp }) { scan ->
+                BarcodeRow(scan, onCopy)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BarcodeRow(scan: BarcodeScanRecord, onCopy: (String) -> Unit) {
+    val strings = LocalStrings.current
+    Card {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    scan.code,
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "${formatTime(scan.timestamp)}  ${
+                        when (scan.status) {
+                            BarcodeSendStatus.SENDING -> strings.barcodeSendingLabel
+                            BarcodeSendStatus.SENT -> strings.barcodeSentLabel
+                            BarcodeSendStatus.FAILED -> strings.barcodeFailedLabel
+                        }
+                    }",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (scan.status) {
+                        BarcodeSendStatus.SENDING -> MaterialTheme.colorScheme.onSurfaceVariant
+                        BarcodeSendStatus.SENT -> SuccessGreen
+                        BarcodeSendStatus.FAILED -> ErrorRed
+                    }
+                )
+            }
+            Icon(
+                Icons.Filled.ContentCopy,
+                contentDescription = strings.copyEpcDescription,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable { onCopy(scan.code) }
+            )
         }
     }
 }
@@ -454,12 +572,26 @@ private fun TagRow(tag: TagRecord, onCopy: (String) -> Unit) {
                         maxLines = 1
                     )
                 }
-                Text(
-                    "R:${tag.readCount}  RSSI:${tag.rssi}  Ant:${tag.antenna}  ${formatTime(tag.lastSeen)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
+                val quality = remember(tag.rssi, tag.readCount) { TagQuality.from(tag.rssi, tag.readCount) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "R:${tag.readCount}  ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                    Text(
+                        "${strings.qualityLabel}${strings.qualityText(quality)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = when (quality) {
+                            TagQuality.STRONG -> SuccessGreen
+                            TagQuality.MEDIUM -> WarningAmber
+                            TagQuality.WEAK -> ErrorRed
+                        },
+                        maxLines = 1
+                    )
+                }
             }
             Icon(
                 Icons.Filled.ContentCopy,

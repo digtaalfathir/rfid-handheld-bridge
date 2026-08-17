@@ -9,9 +9,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.viewModelScope
+import com.example.chainwayrfidbridge.barcode.BarcodeReaderManager
+import com.example.chainwayrfidbridge.barcode.ChainwayBarcodeManager
+import com.example.chainwayrfidbridge.barcode.ZebraBarcodeManager
+import com.example.chainwayrfidbridge.data.BarcodeScanRecord
+import com.example.chainwayrfidbridge.data.BarcodeSendStatus
 import com.example.chainwayrfidbridge.data.ConfigRepository
 import com.example.chainwayrfidbridge.data.DeviceType
+import com.example.chainwayrfidbridge.data.InputMode
 import com.example.chainwayrfidbridge.data.ScanConfig
+import com.example.chainwayrfidbridge.data.TagQuality
 import com.example.chainwayrfidbridge.data.TagRecord
 import com.example.chainwayrfidbridge.data.ValidationErrorType
 import com.example.chainwayrfidbridge.network.ApiClient
@@ -50,7 +57,7 @@ enum class SortOption {
     LAST_SEEN_DESC,
     EPC_ASC,
     READ_COUNT_DESC,
-    RSSI_DESC
+    QUALITY_DESC
 }
 
 sealed class SendStatus {
@@ -78,7 +85,8 @@ data class ScanUiState(
     val scanStartError: String? = null,
     val searchQuery: String = "",
     val sortOption: SortOption = SortOption.LAST_SEEN_DESC,
-    val updateStatus: UpdateStatus = UpdateStatus.Idle
+    val updateStatus: UpdateStatus = UpdateStatus.Idle,
+    val barcodeScans: List<BarcodeScanRecord> = emptyList()
 )
 
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
@@ -90,6 +98,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     private val reader: RfidReaderManager = when (configRepo.loadDeviceType()) {
         DeviceType.ZEBRA -> ZebraReaderManager()
         DeviceType.CHAINWAY, null -> ChainwayReaderManager()
+    }
+    private val barcodeManager: BarcodeReaderManager = when (configRepo.loadDeviceType()) {
+        DeviceType.ZEBRA -> ZebraBarcodeManager()
+        DeviceType.CHAINWAY, null -> ChainwayBarcodeManager()
     }
     private val api = ApiClient()
     private val updateClient = UpdateClient()
@@ -110,9 +122,12 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         reader.setTriggerListener(::onTriggerPressed, ::onTriggerReleased)
+        barcodeManager.setResultListener(::onBarcodeScanned)
         viewModelScope.launch(Dispatchers.IO) {
             val ok = reader.connect(getApplication())
             if (ok) reader.setPower(_config.value.power)
+            reader.setInputMode(_config.value.inputMode)
+            barcodeManager.connect(getApplication())
             _uiState.update { it.copy(readerConnected = ok) }
         }
         checkForUpdate()
@@ -205,18 +220,46 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         if (_uiState.value.scanning) stopScanAndSend() else startScan()
     }
 
-    /** Physical trigger, pressed: hold-to-scan. Always restarts fresh when tags are already present. */
+    /** Physical trigger, pressed: hold-to-scan (RFID) or arm the barcode decoder (Barcode) —
+     * whichever manager owns the trigger for the currently selected InputMode. Always restarts
+     * fresh when tags are already present, for RFID. */
     fun onTriggerPressed() {
         if (!canScanNow()) return
+        if (_config.value.inputMode == InputMode.BARCODE) {
+            barcodeManager.startScan()
+            return
+        }
         val s = _uiState.value
         if (s.scanning) return
         if (s.tags.isEmpty()) toggleScan() else startNewScan()
     }
 
-    /** Physical trigger, released: stop (mirrors the on-screen Stop Scan button). */
+    /** Physical trigger, released: stop (mirrors the on-screen Stop Scan button in RFID mode). */
     fun onTriggerReleased() {
         if (!canScanNow()) return
+        if (_config.value.inputMode == InputMode.BARCODE) {
+            barcodeManager.stopScan()
+            return
+        }
         if (_uiState.value.scanning) toggleScan()
+    }
+
+    /** A single decoded barcode — sent immediately with the same payload shape RFID uses, one
+     * request per code rather than batched, since that's how barcode scanning is naturally used
+     * (point, scan, confirm, move on) unlike RFID's bulk-inventory-then-send flow. */
+    private fun onBarcodeScanned(code: String) {
+        val record = BarcodeScanRecord(code, System.currentTimeMillis(), BarcodeSendStatus.SENDING)
+        _uiState.update { it.copy(barcodeScans = listOf(record) + it.barcodeScans) }
+        if (_config.value.soundEnabled) playBeep()
+        viewModelScope.launch(Dispatchers.IO) {
+            val error = api.sendCodes(_config.value, listOf(code))
+            val newStatus = if (error == null) BarcodeSendStatus.SENT else BarcodeSendStatus.FAILED
+            _uiState.update { state ->
+                state.copy(barcodeScans = state.barcodeScans.map {
+                    if (it === record) it.copy(status = newStatus) else it
+                })
+            }
+        }
     }
 
     /** Background Scanning off + app not visible = ignore the trigger entirely. Some of these
@@ -408,7 +451,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             SortOption.LAST_SEEN_DESC -> list.sortedByDescending { it.lastSeen }
             SortOption.EPC_ASC -> list.sortedBy { it.epc }
             SortOption.READ_COUNT_DESC -> list.sortedByDescending { it.readCount }
-            SortOption.RSSI_DESC -> list.sortedByDescending { it.rssi.toDoubleOrNull() ?: Double.NEGATIVE_INFINITY }
+            SortOption.QUALITY_DESC -> list.sortedByDescending { TagQuality.from(it.rssi, it.readCount) }
         }
     }
 
@@ -426,6 +469,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     fun saveConfig(newConfig: ScanConfig): Map<String, ValidationErrorType> {
         val errors = newConfig.validate(reader.powerRange)
         if (errors.isEmpty()) {
+            val inputModeChanged = newConfig.inputMode != _config.value.inputMode
             configRepo.save(newConfig)
             configRepo.rememberCustomAntenna(newConfig.antenna)
             configRepo.rememberCustomRrType(newConfig.rrType)
@@ -434,7 +478,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             configRepo.rememberCustomInitialYear(newConfig.initialYear)
             configRepo.rememberCustomFactoryCode(newConfig.factoryCode)
             _config.value = newConfig
-            viewModelScope.launch(Dispatchers.IO) { reader.setPower(newConfig.power) }
+            viewModelScope.launch(Dispatchers.IO) {
+                reader.setPower(newConfig.power)
+                if (inputModeChanged) reader.setInputMode(newConfig.inputMode)
+            }
         }
         return errors
     }
@@ -467,6 +514,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         reader.release()
+        barcodeManager.release()
         toneGenerator?.release()
     }
 }

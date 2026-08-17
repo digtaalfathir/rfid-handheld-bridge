@@ -21,9 +21,13 @@ class ApiClient {
         .build()
 
     /** Returns null on success, or a human-readable reason on failure. */
-    fun sendTags(config: ScanConfig, tags: List<TagRecord>): String? {
+    fun sendTags(config: ScanConfig, tags: List<TagRecord>): String? = sendCodes(config, tags.map { it.epc })
+
+    /** Same payload shape as [sendTags], for callers that only have raw codes — e.g. a single
+     * barcode scan, sent immediately rather than batched like RFID's tag list. */
+    fun sendCodes(config: ScanConfig, codes: List<String>): String? {
         return try {
-            val payload = buildPayload(config, tags.map { it.epc }, isoNow())
+            val payload = buildPayload(config, codes, isoNow())
             val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val request = Request.Builder().url(config.fullApiUrl()).post(body).build()
 

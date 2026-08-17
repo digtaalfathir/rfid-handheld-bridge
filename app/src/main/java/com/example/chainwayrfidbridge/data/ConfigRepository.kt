@@ -51,6 +51,7 @@ class ConfigRepository(context: Context) {
 
     fun load(): ScanConfig = ScanConfig(
         mode = ScanMode.fromKey(prefs.getString("mode", defaults.mode.key)),
+        inputMode = InputMode.fromKey(prefs.getString("input_mode", defaults.inputMode.key)),
         baseUrl = prefs.getString("base_url", defaults.baseUrl) ?: defaults.baseUrl,
         endpoint = prefs.getString("endpoint", defaults.endpoint) ?: defaults.endpoint,
         readerId = deviceReaderId,
@@ -74,6 +75,7 @@ class ConfigRepository(context: Context) {
     fun save(config: ScanConfig) {
         prefs.edit()
             .putString("mode", config.mode.key)
+            .putString("input_mode", config.inputMode.key)
             .putString("base_url", config.baseUrl)
             .putString("endpoint", config.endpoint)
             // reader_id intentionally not persisted — always derived live from the device
