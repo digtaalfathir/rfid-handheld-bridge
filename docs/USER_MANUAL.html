@@ -265,9 +265,9 @@ membedakannya lewat satu penanda di data yang dikirim, sehingga operator tidak p
 perbedaan teknisnya.</p>
 
 <div class="tip">
-<b>Khusus Mode Register</b> muncul satu centang tambahan: <i>"Hasil scan langsung dikirim ke
-stok saat ini"</i>. Jika dicentang, hasil scan tersebut juga langsung memperbarui stok saat itu
-juga. Kotak centang ini tidak muncul sama sekali di Mode WO.
+Di bawah tombol WO/Register ada satu centang: <i>"Hasil scan langsung dikirim ke stok saat
+ini"</i>, tersedia di <b>kedua mode</b>. Jika dicentang, hasil scan tersebut juga langsung
+memperbarui stok saat itu juga.
 </div>
 </div>
 
@@ -377,15 +377,25 @@ punya ID unik tanpa perlu diatur manual</li>
 <li><b>Antenna</b> &mdash; nomor antena yang dipakai</li>
 </ul>
 
-<h3>10.3 Test Connection &amp; Register Configuration</h3>
+<h3>10.3 Tes &amp; Ambil Data, dan Register Configuration</h3>
 <div class="shot">
   <img src="screenshots/settings-test-connection-register.png" width="190" height="317">
 </div>
 <ul>
-<li><b>Test Connection</b> &mdash; mengecek apakah alamat server bisa dihubungi</li>
-<li><b>Register Configuration</b> &mdash; RR Type, Maker Name, Initial Year, Factory Code
-(selalu dikirim ke server terlepas dari Mode WO/Register yang dipilih)</li>
+<li><b>Tes &amp; Ambil Data</b> &mdash; mengecek apakah alamat server bisa dihubungi, sekaligus
+mengambil daftar terbaru untuk <b>RR Type</b> dan <b>Factory Code</b> langsung dari server</li>
+<li><b>Register Configuration</b> &mdash; Maker Name dan Initial Year tetap bisa diisi manual,
+tetapi <b>RR Type</b> dan <b>Factory Code</b> sekarang <u>hanya bisa dipilih dari daftar</u> hasil
+tombol Tes &amp; Ambil Data di atas &mdash; tidak bisa lagi diketik manual. Semua field ini selalu
+dikirim ke server terlepas dari Mode WO/Register yang dipilih.</li>
 </ul>
+
+<div class="note">
+Jika daftar RR Type atau Factory Code masih kosong (belum pernah ditekan sekali pun), tekan
+<b>Tes &amp; Ambil Data</b> terlebih dahulu sebelum memilih nilainya &mdash; daftar ini tersimpan
+di perangkat, jadi tidak perlu ditekan ulang setiap kali membuka Pengaturan, kecuali datanya
+berubah di server.
+</div>
 
 <h3>10.4 Power</h3>
 <div class="shot">
