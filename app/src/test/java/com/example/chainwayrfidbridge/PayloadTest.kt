@@ -19,10 +19,11 @@ class PayloadTest {
             factoryCode = "FAC1",
             opname = false
         )
-        val json = buildPayload(config, listOf("E200001122"), "2026-07-20T00:00:00Z")
+        val json = buildPayload(config, mapOf("E200001122" to "strong"), "2026-07-20T00:00:00Z")
         assertEquals("C72", json.getString("reader_id"))
         assertEquals("1", json.getString("antenna"))
-        assertEquals(1, json.getJSONArray("idHex").length())
+        assertEquals(1, json.getJSONObject("idHex").length())
+        assertEquals("strong", json.getJSONObject("idHex").getString("E200001122"))
         assertEquals("2026-07-20T00:00:00Z", json.getString("timestamp"))
         assertEquals("wo", json.getString("mode"))
         assertEquals(false, json.getBoolean("opname"))
@@ -41,10 +42,10 @@ class PayloadTest {
             factoryCode = "FAC2",
             opname = true
         )
-        val json = buildPayload(config, listOf("E1", "E2"), "2026-07-20T00:00:00Z")
+        val json = buildPayload(config, mapOf("E1" to "low", "E2" to "medium"), "2026-07-20T00:00:00Z")
         assertEquals("TRIAL", json.getString("rr_type"))
         assertEquals("Acme", json.getString("maker_name"))
-        assertEquals(2, json.getJSONArray("idHex").length())
+        assertEquals(2, json.getJSONObject("idHex").length())
         assertEquals("2026", json.getString("initial_year"))
         assertEquals("MC333R", json.getString("reader_id"))
         assertEquals("2", json.getString("antenna"))

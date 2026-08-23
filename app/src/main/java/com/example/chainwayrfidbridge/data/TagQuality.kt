@@ -16,6 +16,15 @@ package com.example.chainwayrfidbridge.data
 enum class TagQuality {
     WEAK, MEDIUM, STRONG;
 
+    /** The string sent to the server per EPC in the payload's "idHex" — independent of the
+     * localized label shown in the UI. WEAK maps to "low" rather than its own enum name. */
+    val wireValue: String
+        get() = when (this) {
+            WEAK -> "low"
+            MEDIUM -> "medium"
+            STRONG -> "strong"
+        }
+
     companion object {
         fun from(rssi: String, readCount: Int): TagQuality {
             val value = rssi.toDoubleOrNull()

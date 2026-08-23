@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import com.example.chainwayrfidbridge.BuildConfig
 import com.example.chainwayrfidbridge.ScanViewModel
 import com.example.chainwayrfidbridge.data.AppLanguage
+import com.example.chainwayrfidbridge.data.FactoryCodeOption
 import com.example.chainwayrfidbridge.data.InputMode
 import com.example.chainwayrfidbridge.data.ScanConfig
 import com.example.chainwayrfidbridge.data.ScanMode
@@ -88,11 +89,11 @@ fun SettingsScreen(
     var testing by remember { mutableStateOf(false) }
     val powerRange = remember { viewModel.powerRange }
     val antennaOptions = remember { viewModel.antennaOptions() }
-    val rrTypeOptions = remember { viewModel.rrTypeOptions() }
+    var rrTypeOptions by remember { mutableStateOf(viewModel.rrTypeOptions()) }
     val baseUrlOptions = remember { viewModel.baseUrlOptions() }
     val endpointOptions = remember { viewModel.endpointOptions() }
     val initialYearOptions = remember { viewModel.initialYearOptions() }
-    val factoryCodeOptions = remember { viewModel.factoryCodeOptions() }
+    var factoryCodeOptions by remember { mutableStateOf(viewModel.factoryCodeOptions()) }
 
     Scaffold(
         topBar = {
@@ -159,16 +160,14 @@ fun SettingsScreen(
                         }
                     }
                 }
-                if (draft.mode == ScanMode.REGISTER) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(checked = draft.opname, onCheckedChange = { draft = draft.copy(opname = it) })
-                        Spacer(Modifier.width(4.dp))
-                        Text(strings.opnameLabel, style = MaterialTheme.typography.bodyMedium)
-                    }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = draft.opname, onCheckedChange = { draft = draft.copy(opname = it) })
+                    Spacer(Modifier.width(4.dp))
+                    Text(strings.opnameLabel, style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
@@ -192,13 +191,18 @@ fun SettingsScreen(
                 OutlinedButton(
                     onClick = {
                         testing = true
-                        viewModel.testConnection(draft.fullApiUrl()) { error ->
-                            testing = false
-                            Toast.makeText(
-                                context,
-                                if (error == null) strings.serverReachable else "${strings.testFailedPrefix}$error",
-                                Toast.LENGTH_LONG
-                            ).show()
+                        viewModel.testConnection(draft.fullApiUrl()) { connectionError ->
+                            viewModel.fetchDropdownData(draft.baseUrl) { fetchOk ->
+                                testing = false
+                                rrTypeOptions = viewModel.rrTypeOptions()
+                                factoryCodeOptions = viewModel.factoryCodeOptions()
+                                val message = when {
+                                    connectionError != null -> "${strings.testFailedPrefix}$connectionError"
+                                    !fetchOk -> strings.dropdownFetchFailed
+                                    else -> strings.serverReachable
+                                }
+                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            }
                         }
                     },
                     enabled = !testing,
@@ -217,7 +221,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
 
             SectionCard(title = strings.registerConfigTitle, icon = Icons.Filled.Description) {
-                DropdownField(strings.rrTypeLabel, draft.rrType, rrTypeOptions, errors["rrType"]?.let(strings::validationMessage)) {
+                SelectOnlyDropdownField(strings.rrTypeLabel, draft.rrType, rrTypeOptions.map { it to it }, errors["rrType"]?.let(strings::validationMessage)) {
                     draft = draft.copy(rrType = it)
                 }
                 Spacer(Modifier.height(8.dp))
@@ -229,7 +233,12 @@ fun SettingsScreen(
                     draft = draft.copy(initialYear = it)
                 }
                 Spacer(Modifier.height(8.dp))
-                DropdownField(strings.factoryCodeLabel, draft.factoryCode, factoryCodeOptions, null) {
+                SelectOnlyDropdownField(
+                    strings.factoryCodeLabel,
+                    draft.factoryCode,
+                    factoryCodeOptions.map { it.code to "${it.code} - ${it.name}" },
+                    null
+                ) {
                     draft = draft.copy(factoryCode = it)
                 }
             }
@@ -461,6 +470,43 @@ private fun DropdownField(label: String, value: String, options: List<String>, e
                     text = { Text(option) },
                     onClick = {
                         onValueChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** Same shape as [DropdownField] but selection-only — no typing, since these options come from
+ * the server (RR Type, Factory Code) rather than free text an operator could reasonably type by
+ * hand. [options] is value-to-display-label so Factory Code can show "code - name" while [value]
+ * (and what [onSelect] receives) stays just the code. */
+@Composable
+private fun SelectOnlyDropdownField(label: String, value: String, options: List<Pair<String, String>>, error: String?, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            isError = error != null,
+            supportingText = { if (error != null) Text(error) },
+            singleLine = true,
+            trailingIcon = {
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (optValue, optLabel) ->
+                DropdownMenuItem(
+                    text = { Text(optLabel) },
+                    onClick = {
+                        onSelect(optValue)
                         expanded = false
                     }
                 )

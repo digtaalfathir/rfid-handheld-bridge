@@ -123,11 +123,11 @@ Switchable in Settings → Mode. Both modes post to the **same endpoint** with t
 shape** — a `mode` field in the payload (`"wo"` or `"register"`) is what tells your backend which
 flow it is. See [API payload](#api-payload) for the exact fields.
 
-**Register mode only** adds one extra control: a checkbox, *"Scan result is sent to current
-stock"* — when checked, the payload's `opname` field is `true`, telling the backend this scan
-should also post straight to current stock. It's hidden entirely in WO mode.
+A checkbox next to the toggle, *"Scan result is sent to current stock"*, is available in **both**
+modes — when checked, the payload's `opname` field is `true`, telling the backend this scan should
+also post straight to current stock.
 
-![Register mode selected, revealing the "opname" checkbox](docs/screenshots/settings-scan-mode-and-mode.png)
+![Mode toggle with the "opname" checkbox](docs/screenshots/settings-scan-mode-and-mode.png)
 
 ## Background scanning & the floating bubble
 
@@ -193,7 +193,7 @@ Every section, top to bottom, each with its own icon:
 
 - **Scan Mode** — RFID / Barcode toggle described in [Barcode mode](#barcode-mode) above; the
   selected option's icon turns purple when Barcode is active
-- **Mode** — WO / Register toggle; Register mode reveals the "opname" checkbox described earlier
+- **Mode** — WO / Register toggle, plus the "opname" checkbox described earlier (available in both)
 
 ![Scan Mode and Mode sections](docs/screenshots/settings-scan-mode-and-mode.png)
 
@@ -206,12 +206,16 @@ Every section, top to bottom, each with its own icon:
 
 ![API Configuration section](docs/screenshots/settings-api-config.png)
 
-  - **Test Connection** — pings the configured URL and reports whether it's reachable
-- **Register Configuration** — RR Type, Maker Name, Initial Year, and Factory Code, all editable
-  dropdowns that remember custom entries (always sent regardless of mode, since the payload shape
-  is shared)
+  - **Test & Get Data** — pings the configured Base URL and, in the same tap, fetches the **RR
+    Type** and **Factory Code** lists from it (see below)
+- **Register Configuration** — Maker Name and Initial Year are editable dropdowns that remember
+  custom entries; **RR Type** and **Factory Code** are selection-only (no manual typing) and
+  populated by the **Test & Get Data** button above from `{baseUrl}/api/v1/master/dropdown/rr-type/components`
+  and `{baseUrl}/api/v1/master/warehouse-factory/` respectively — Factory Code shows "code - name"
+  in the list but only the code is stored and sent. Both lists are cached on the device, so they
+  stay populated across app restarts until the button is tapped again.
 
-![Test Connection button and Register Configuration](docs/screenshots/settings-test-connection-register.png)
+![Test & Get Data button and Register Configuration](docs/screenshots/settings-test-connection-register.png)
 
 - **Power** — native range per vendor, not an abstracted scale: **Chainway 1–30 dBm**, **Zebra
   0–300** (matching Zebra's own 123RFID app's units directly). **Hidden entirely in Barcode mode**,
@@ -383,7 +387,10 @@ shared default):
 {
   "rr_type": "T1B",
   "maker_name": "...",
-  "idHex": ["E28011...", "E28022..."],
+  "idHex": {
+    "E28011...": "strong",
+    "E28022...": "medium"
+  },
   "initial_year": "2026",
   "reader_id": "MC33-12f3da",
   "antenna": "1",
@@ -394,10 +401,14 @@ shared default):
 }
 ```
 
-Barcode mode posts the exact same shape — `idHex` just contains a single code instead of a batch,
-since each scan sends immediately rather than waiting for a stop-scan to collect several.
+`idHex` is an object, not an array — each key is an EPC (or barcode), each value its
+[Signal Quality](#signal-quality) wire value (`"low"` / `"medium"` / `"strong"`; note `WEAK` maps
+to the string `"low"`, not `"weak"`). Barcode mode posts the exact same shape — `idHex` just
+contains a single code instead of a batch (always `"strong"`, since a successful decode is a
+certain read rather than a marginal RF one), since each scan sends immediately rather than waiting
+for a stop-scan to collect several.
 
 `reader_id` is derived automatically from the device (`<model>-<short Android ID>`), never typed
 by hand — every handheld in a fleet gets a unique, readable ID with no per-device setup.
-`opname` is Register-only in the UI (a checkbox that only appears in that mode, meaning "also
-post straight to current stock") but is always present in the payload, `false` outside Register.
+`opname` is available in both WO and Register (a checkbox next to the Mode toggle, meaning "also
+post straight to current stock"), `false` unless checked.

@@ -16,6 +16,7 @@ import com.example.chainwayrfidbridge.data.BarcodeScanRecord
 import com.example.chainwayrfidbridge.data.BarcodeSendStatus
 import com.example.chainwayrfidbridge.data.ConfigRepository
 import com.example.chainwayrfidbridge.data.DeviceType
+import com.example.chainwayrfidbridge.data.FactoryCodeOption
 import com.example.chainwayrfidbridge.data.InputMode
 import com.example.chainwayrfidbridge.data.ScanConfig
 import com.example.chainwayrfidbridge.data.TagQuality
@@ -252,7 +253,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(barcodeScans = listOf(record) + it.barcodeScans) }
         if (_config.value.soundEnabled) playBeep()
         viewModelScope.launch(Dispatchers.IO) {
-            val error = api.sendCodes(_config.value, listOf(code))
+            val error = api.sendCodes(_config.value, mapOf(code to TagQuality.STRONG.wireValue))
             val newStatus = if (error == null) BarcodeSendStatus.SENT else BarcodeSendStatus.FAILED
             _uiState.update { state ->
                 state.copy(barcodeScans = state.barcodeScans.map {
@@ -472,11 +473,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             val inputModeChanged = newConfig.inputMode != _config.value.inputMode
             configRepo.save(newConfig)
             configRepo.rememberCustomAntenna(newConfig.antenna)
-            configRepo.rememberCustomRrType(newConfig.rrType)
             configRepo.rememberCustomBaseUrl(newConfig.baseUrl)
             configRepo.rememberCustomEndpoint(newConfig.endpoint)
             configRepo.rememberCustomInitialYear(newConfig.initialYear)
-            configRepo.rememberCustomFactoryCode(newConfig.factoryCode)
             _config.value = newConfig
             viewModelScope.launch(Dispatchers.IO) {
                 reader.setPower(newConfig.power)
@@ -496,7 +495,19 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     fun initialYearOptions(): List<String> = configRepo.initialYearOptions()
 
-    fun factoryCodeOptions(): List<String> = configRepo.factoryCodeOptions()
+    fun factoryCodeOptions(): List<FactoryCodeOption> = configRepo.factoryCodeOptions()
+
+    /** Fetches RR Type and Factory Code lists from [baseUrl] and caches whichever succeed.
+     * [onResult] reports true only if both fetches succeeded. */
+    fun fetchDropdownData(baseUrl: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val rrTypes = api.fetchRrTypes(baseUrl)
+            val factoryCodes = api.fetchFactoryCodes(baseUrl)
+            rrTypes?.let(configRepo::saveRrTypeOptions)
+            factoryCodes?.let(configRepo::saveFactoryCodeOptions)
+            withContext(Dispatchers.Main) { onResult(rrTypes != null && factoryCodes != null) }
+        }
+    }
 
     fun resetConfig(): ScanConfig {
         val defaults = configRepo.reset()

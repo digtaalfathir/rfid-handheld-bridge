@@ -3,6 +3,8 @@ package com.example.chainwayrfidbridge.data
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ConfigRepository(context: Context) {
 
@@ -101,8 +103,41 @@ class ConfigRepository(context: Context) {
     fun antennaOptions(): List<String> =
         (ScanConfig.ANTENNA_OPTIONS + customOptions("custom_antenna_options")).distinct()
 
-    fun rrTypeOptions(): List<String> =
-        (ScanConfig.RR_TYPE_OPTIONS + customOptions("custom_rr_type_options")).distinct()
+    // RR Type and Factory Code are no longer hardcoded or manually typeable — both are fetched
+    // live from the configured Base URL (Settings' "Test & Get Data" button) and cached here so
+    // the dropdown stays populated across app restarts without needing a fetch on every visit.
+    fun rrTypeOptions(): List<String> {
+        val raw = prefs.getString("cached_rr_types", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveRrTypeOptions(types: List<String>) {
+        prefs.edit().putString("cached_rr_types", JSONArray(types).toString()).apply()
+    }
+
+    fun factoryCodeOptions(): List<FactoryCodeOption> {
+        val raw = prefs.getString("cached_factory_codes", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                FactoryCodeOption(o.getString("code"), o.getString("name"))
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveFactoryCodeOptions(options: List<FactoryCodeOption>) {
+        val arr = JSONArray()
+        options.forEach { arr.put(JSONObject().put("code", it.code).put("name", it.name)) }
+        prefs.edit().putString("cached_factory_codes", arr.toString()).apply()
+    }
 
     fun baseUrlOptions(): List<String> =
         (ScanConfig.BASE_URL_OPTIONS + customOptions("custom_base_url_options")).distinct()
@@ -113,19 +148,13 @@ class ConfigRepository(context: Context) {
     fun initialYearOptions(): List<String> =
         (ScanConfig.INITIAL_YEAR_OPTIONS + customOptions("custom_initial_year_options")).distinct()
 
-    fun factoryCodeOptions(): List<String> = customOptions("custom_factory_code_options").toList()
-
     fun rememberCustomAntenna(value: String) = addCustomOption("custom_antenna_options", value)
-
-    fun rememberCustomRrType(value: String) = addCustomOption("custom_rr_type_options", value)
 
     fun rememberCustomBaseUrl(value: String) = addCustomOption("custom_base_url_options", value)
 
     fun rememberCustomEndpoint(value: String) = addCustomOption("custom_endpoint_options", value)
 
     fun rememberCustomInitialYear(value: String) = addCustomOption("custom_initial_year_options", value)
-
-    fun rememberCustomFactoryCode(value: String) = addCustomOption("custom_factory_code_options", value)
 
     private fun customOptions(key: String): Set<String> = prefs.getStringSet(key, emptySet()) ?: emptySet()
 

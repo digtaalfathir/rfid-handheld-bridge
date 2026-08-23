@@ -41,9 +41,6 @@ data class ScanConfig(
         const val MIN_VOLUME = 1
         const val MAX_VOLUME = 100
         val ANTENNA_OPTIONS = (1..8).map { it.toString() }
-        val RR_TYPE_OPTIONS = listOf(
-            "T1B", "T1R", "T1F", "T5B", "SP3", "T3N", "T1X", "T2A", "SP2 UC", "T3P", "T3M", "T3A"
-        )
         val BASE_URL_OPTIONS = listOf(
             "https://wms.suite.stechoq-j.com", "https://product.suite.stechoq-j.com"
         )
