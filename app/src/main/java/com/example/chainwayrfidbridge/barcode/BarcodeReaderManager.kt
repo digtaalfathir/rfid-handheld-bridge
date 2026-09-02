@@ -18,6 +18,15 @@ interface BarcodeReaderManager {
 
     fun connect(context: Context): Boolean
 
+    /** Tells the backend whether Barcode mode is the one currently selected. Meaningful only
+     * where activating barcode capture has a side effect on something else sharing the trigger
+     * (Zebra, via a DataWedge profile switch) — a no-op default covers Chainway, whose barcode
+     * and RFID hardware paths are already fully independent. Called once at connect time and
+     * again whenever the operator changes Scan Mode, mirroring RfidReaderManager.setInputMode —
+     * connect() itself must stay free of that side effect so an RFID-mode operator never has
+     * DataWedge's barcode profile activated underneath them. */
+    fun setActive(active: Boolean) {}
+
     /** [onResult] fires once per decoded barcode (thread depends on the implementation). */
     fun setResultListener(onResult: (String) -> Unit)
 

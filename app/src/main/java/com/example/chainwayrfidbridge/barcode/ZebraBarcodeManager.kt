@@ -27,6 +27,14 @@ private const val PROFILE_NAME = "StechoqRFIDSuiteBarcode"
  * If results still don't arrive, check the DataWedge app itself to confirm
  * "StechoqRFIDSuiteBarcode" exists, is enabled, and PARAM_LIST key names match the DataWedge
  * version on the handheld.
+ *
+ * Root-cause fix for the barcode scanner firing alongside RFID: configureProfile() used to run
+ * unconditionally from connect(), which ScanViewModel calls at startup regardless of which mode
+ * is selected — so an RFID-mode operator got this profile force-activated (SWITCH_TO_PROFILE)
+ * underneath them, undoing ZebraReaderManager's own DataWedge-disable-on-RFID-mode logic. connect()
+ * now only registers the result receiver; configureProfile() only runs from [setActive], called by
+ * ScanViewModel exactly when Barcode mode is actually selected — same trigger as
+ * RfidReaderManager.setInputMode.
  */
 class ZebraBarcodeManager : BarcodeReaderManager {
 
@@ -47,7 +55,6 @@ class ZebraBarcodeManager : BarcodeReaderManager {
         val ctx = context.applicationContext
         appContext = ctx
         return try {
-            configureProfile(ctx)
             if (!registered) {
                 @Suppress("UnspecifiedRegisterReceiverFlag") // targetSdk 32 — legacy registration still valid
                 ctx.registerReceiver(receiver, IntentFilter(resultAction(ctx.packageName)))
@@ -56,6 +63,23 @@ class ZebraBarcodeManager : BarcodeReaderManager {
             true
         } catch (e: Exception) {
             false
+        }
+    }
+
+    override fun setActive(active: Boolean) {
+        val ctx = appContext ?: return
+        if (active) {
+            configureProfile(ctx)
+        } else {
+            // Disable our profile outright rather than just no-op — while it stayed enabled and
+            // (from an earlier activation) still the DataWedge-active profile, its own
+            // scanner_input_enabled=true could keep the barcode engine live even after
+            // ZebraReaderManager separately disables the global scanner plugin for RFID mode.
+            sendSetConfig(ctx, Bundle().apply {
+                putString("PROFILE_NAME", PROFILE_NAME)
+                putString("PROFILE_ENABLED", "false")
+                putString("CONFIG_MODE", "UPDATE")
+            })
         }
     }
 

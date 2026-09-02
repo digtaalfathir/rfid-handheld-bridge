@@ -129,6 +129,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             if (ok) reader.setPower(_config.value.power)
             reader.setInputMode(_config.value.inputMode)
             barcodeManager.connect(getApplication())
+            barcodeManager.setActive(_config.value.inputMode == InputMode.BARCODE)
             _uiState.update { it.copy(readerConnected = ok) }
         }
         checkForUpdate()
@@ -479,7 +480,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             _config.value = newConfig
             viewModelScope.launch(Dispatchers.IO) {
                 reader.setPower(newConfig.power)
-                if (inputModeChanged) reader.setInputMode(newConfig.inputMode)
+                if (inputModeChanged) {
+                    reader.setInputMode(newConfig.inputMode)
+                    barcodeManager.setActive(newConfig.inputMode == InputMode.BARCODE)
+                }
             }
         }
         return errors

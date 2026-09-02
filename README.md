@@ -249,11 +249,17 @@ string table, so nothing drifts out of sync between languages.
 - **"RFID_CHARGING_COMMAND_NOT_ALLOWED" on Zebra** — some Zebra units refuse to start an RFID
   scan while they believe they're charging, which includes sitting in a powered USB/adb cradle for
   development. Not a bug — unplug and test normally.
-- **Barcode laser fires alongside RFID on Zebra (in RFID mode)** — Zebra's DataWedge barcode
-  engine can reclaim the physical trigger when a "real" app (one with its own DataWedge profile,
-  e.g. a browser) comes to the foreground. The app disables DataWedge's scanner plugin whenever
-  RFID mode is active and re-asserts the currently-selected trigger mode on every foreground/
-  background transition; if it ever recurs, it's a DataWedge profile issue on that specific unit.
+- **Barcode laser fires alongside RFID on Zebra (in RFID mode)** — was a real bug (not just a
+  DataWedge quirk): `ScanViewModel` used to call `ZebraBarcodeManager.connect()` unconditionally
+  at startup, and `connect()` used to also configure *and* `SWITCH_TO_PROFILE` DataWedge's
+  barcode-capable profile as a side effect — regardless of which Scan Mode was actually selected.
+  An RFID-mode operator got that profile force-activated underneath them, undoing
+  `ZebraReaderManager`'s own DataWedge-disable-on-RFID-mode logic. Fixed by moving that
+  configure/activate step out of `connect()` into `setActive(active)`, called only when Barcode
+  mode is actually selected (mirroring `RfidReaderManager.setInputMode`) — verified via logcat
+  that RFID mode now sends zero DataWedge profile commands, and switching to RFID mode explicitly
+  disables the scanner (`Status:DISABLED;ProfileName:null`). If it ever recurs on a specific unit
+  despite that, it'd point to a genuine DataWedge profile issue on that handheld.
 - **Update won't install on a device you tested with a local/manual build** — Android refuses to
   install an "update" with an equal-or-lower `versionCode` than what's already there. This only
   matters if you've been sideloading manual builds outside the normal CI pipeline.
