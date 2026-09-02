@@ -19,9 +19,12 @@ import java.util.concurrent.TimeUnit
 
 class ApiClient {
 
+    // Bumped from 10s/5s after a real incident: slow warehouse WiFi meant a send actually
+    // reached the server and was recorded there, but the handheld had already given up and
+    // shown a timeout/failure to the operator — a false negative worse than just waiting longer.
     private val client = OkHttpClient.Builder()
-        .callTimeout(10, TimeUnit.SECONDS)
-        .connectTimeout(5, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
         .build()
 
     /** Returns null on success, or a human-readable reason on failure. */

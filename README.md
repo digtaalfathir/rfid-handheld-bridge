@@ -346,7 +346,7 @@ always overrides both via `-PappVersionCode=`/`-PappVersionName=` — see below.
 every push to `main` — no manual build or upload step, ever. Each run:
 
 1. Computes a version from the run number (`versionCode = <run number> + 1000`, `versionName =
-   1.3.<run number>`) — always increasing, which Android requires for an update to install over
+   1.4.<run number>`) — always increasing, which Android requires for an update to install over
    the previous version, without ever hand-editing `build.gradle`. The `+1000` offset keeps CI's
    versionCode safely clear of anything used during local/manual testing.
 2. Builds and unit-tests the release APK with that version baked in.
