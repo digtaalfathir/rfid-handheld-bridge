@@ -72,7 +72,9 @@ import com.example.chainwayrfidbridge.data.BarcodeSendStatus
 import com.example.chainwayrfidbridge.data.InputMode
 import com.example.chainwayrfidbridge.data.TagQuality
 import com.example.chainwayrfidbridge.data.TagRecord
+import com.example.chainwayrfidbridge.network.formatSendError
 import com.example.chainwayrfidbridge.ui.theme.BarcodeAccent
+import com.example.chainwayrfidbridge.ui.theme.BluePrimary
 import com.example.chainwayrfidbridge.ui.theme.ErrorRed
 import com.example.chainwayrfidbridge.ui.theme.NewTagHighlight
 import com.example.chainwayrfidbridge.ui.theme.SuccessGreen
@@ -429,9 +431,10 @@ private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
             style = MaterialTheme.typography.bodySmall
         )
         is SendStatus.Error -> Row(verticalAlignment = Alignment.CenterVertically) {
+            val display = formatSendError(status.message, strings.systemErrorGeneric)
             Text(
-                "${strings.sendErrorPrefix}${status.message}",
-                color = ErrorRed,
+                display.message,
+                color = if (display.isSystemError) ErrorRed else BluePrimary,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f)
             )

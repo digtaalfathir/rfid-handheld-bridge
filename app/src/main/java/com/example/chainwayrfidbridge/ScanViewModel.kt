@@ -19,6 +19,7 @@ import com.example.chainwayrfidbridge.data.DeviceType
 import com.example.chainwayrfidbridge.data.FactoryCodeOption
 import com.example.chainwayrfidbridge.data.InputMode
 import com.example.chainwayrfidbridge.data.ScanConfig
+import com.example.chainwayrfidbridge.data.SendLogEntry
 import com.example.chainwayrfidbridge.data.TagQuality
 import com.example.chainwayrfidbridge.data.TagRecord
 import com.example.chainwayrfidbridge.data.ValidationErrorType
@@ -65,6 +66,9 @@ sealed class SendStatus {
     object Idle : SendStatus()
     object Sending : SendStatus()
     data class Success(val count: Int) : SendStatus()
+    // Raw, unlocalized detail (HTTP status + body, or an exception message) — the UI layer turns
+    // this into a display message via formatSendError(), same as every other localized string
+    // here coming from AppStrings rather than the ViewModel.
     data class Error(val message: String) : SendStatus()
 }
 
@@ -256,6 +260,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val error = api.sendCodes(_config.value, mapOf(code to TagQuality.STRONG.wireValue))
             val newStatus = if (error == null) BarcodeSendStatus.SENT else BarcodeSendStatus.FAILED
+            configRepo.appendSendLog(SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK ($code)"))
             _uiState.update { state ->
                 state.copy(barcodeScans = state.barcodeScans.map {
                     if (it === record) it.copy(status = newStatus) else it
@@ -416,6 +421,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error))
         }
+        configRepo.appendSendLog(
+            SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK (${snapshot.size} tag)")
+        )
         ScanStateBus.update(
             if (error == null) ScanStateBus.BubbleState.SUCCESS else ScanStateBus.BubbleState.ERROR,
             snapshot.size
@@ -500,6 +508,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     fun initialYearOptions(): List<String> = configRepo.initialYearOptions()
 
     fun factoryCodeOptions(): List<FactoryCodeOption> = configRepo.factoryCodeOptions()
+
+    /** Last 10 send attempts (RFID batch or barcode), newest first — the full/raw detail behind
+     * whatever generalized message the Scan screen showed at the time. */
+    fun sendLog(): List<SendLogEntry> = configRepo.sendLog()
 
     /** Fetches RR Type and Factory Code lists from [baseUrl] and caches whichever succeed.
      * [onResult] reports true only if both fetches succeeded. */

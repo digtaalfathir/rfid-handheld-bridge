@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NetworkCheck
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,6 +52,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -70,8 +74,14 @@ import com.example.chainwayrfidbridge.data.FactoryCodeOption
 import com.example.chainwayrfidbridge.data.InputMode
 import com.example.chainwayrfidbridge.data.ScanConfig
 import com.example.chainwayrfidbridge.data.ScanMode
+import com.example.chainwayrfidbridge.data.SendLogEntry
 import com.example.chainwayrfidbridge.data.ValidationErrorType
 import com.example.chainwayrfidbridge.ui.theme.BarcodeAccent
+import com.example.chainwayrfidbridge.ui.theme.ErrorRed
+import com.example.chainwayrfidbridge.ui.theme.SuccessGreen
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,6 +97,7 @@ fun SettingsScreen(
     var draft by remember { mutableStateOf(viewModel.config.value) }
     var errors by remember { mutableStateOf(emptyMap<String, ValidationErrorType>()) }
     var testing by remember { mutableStateOf(false) }
+    var showLogHistory by remember { mutableStateOf(false) }
     val powerRange = remember { viewModel.powerRange }
     val antennaOptions = remember { viewModel.antennaOptions() }
     var rrTypeOptions by remember { mutableStateOf(viewModel.rrTypeOptions()) }
@@ -350,6 +361,20 @@ fun SettingsScreen(
                 }
             }
 
+            Spacer(Modifier.height(12.dp))
+
+            SectionCard(title = strings.logHistoryTitle, icon = Icons.Filled.History) {
+                OutlinedButton(onClick = { showLogHistory = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.History, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(strings.logHistoryTitle)
+                }
+            }
+
+            if (showLogHistory) {
+                LogHistoryDialog(entries = viewModel.sendLog(), onDismiss = { showLogHistory = false })
+            }
+
             Spacer(Modifier.height(20.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -513,4 +538,50 @@ private fun SelectOnlyDropdownField(label: String, value: String, options: List<
             }
         }
     }
+}
+
+/** The full/raw detail behind whatever generalized message the Scan screen showed at the time —
+ * so a system-error banner ("contact WMS Team") doesn't leave the actual cause unrecoverable. */
+@Composable
+private fun LogHistoryDialog(entries: List<SendLogEntry>, onDismiss: () -> Unit) {
+    val strings = LocalStrings.current
+    val timeFormat = remember { SimpleDateFormat("dd/MM HH:mm:ss", Locale.US) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings.logHistoryTitle) },
+        text = {
+            if (entries.isEmpty()) {
+                Text(strings.logHistoryEmpty, style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    entries.forEachIndexed { index, entry ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (entry.success) strings.logHistorySuccessLabel else strings.logHistoryFailedLabel,
+                                color = if (entry.success) SuccessGreen else ErrorRed,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                timeFormat.format(Date(entry.timestamp)),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(entry.detail, style = MaterialTheme.typography.bodySmall)
+                        if (index != entries.lastIndex) Spacer(Modifier.height(12.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(strings.close) }
+        }
+    )
 }

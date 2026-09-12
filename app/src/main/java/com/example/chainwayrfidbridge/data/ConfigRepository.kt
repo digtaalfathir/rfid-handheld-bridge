@@ -46,6 +46,32 @@ class ConfigRepository(context: Context) {
         devicePrefs.edit().putString("language", language.key).apply()
     }
 
+    // Also device-level: a diagnostic trail, not a setting — "Reset" clearing it away right when
+    // someone's trying to figure out what a generalized on-screen error actually meant would
+    // defeat the point of keeping it at all. Newest first, capped at 10 to stay a quick glance
+    // rather than a growing file.
+    fun sendLog(): List<SendLogEntry> {
+        val raw = devicePrefs.getString("send_log", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                SendLogEntry(o.getLong("timestamp"), o.getBoolean("success"), o.getString("detail"))
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun appendSendLog(entry: SendLogEntry) {
+        val updated = (listOf(entry) + sendLog()).take(10)
+        val arr = JSONArray()
+        updated.forEach {
+            arr.put(JSONObject().put("timestamp", it.timestamp).put("success", it.success).put("detail", it.detail))
+        }
+        devicePrefs.edit().putString("send_log", arr.toString()).apply()
+    }
+
     // Chainway's 1-30 dBm range as a fallback for a device type that isn't picked yet (shouldn't
     // normally happen — the picker screen runs before this ever loads a config for real use).
     private val powerRange: IntRange get() = loadDeviceType()?.powerRange ?: DeviceType.CHAINWAY.powerRange

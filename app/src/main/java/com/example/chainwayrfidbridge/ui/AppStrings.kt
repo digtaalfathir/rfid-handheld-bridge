@@ -35,7 +35,7 @@ data class AppStrings(
     val sending: String,
     val sentPrefix: String,
     val tagWord: String,
-    val sendErrorPrefix: String,
+    val systemErrorGeneric: String,
     val retry: String,
     val emptyTagList: String,
     val searchPlaceholder: String,
@@ -111,6 +111,13 @@ data class AppStrings(
     val configInvalidToast: String,
     val versionPrefix: String,
 
+    // Log history (Settings)
+    val logHistoryTitle: String,
+    val logHistoryEmpty: String,
+    val logHistorySuccessLabel: String,
+    val logHistoryFailedLabel: String,
+    val close: String,
+
     // Validation errors
     val errorBaseUrlFormat: String,
     val errorReaderIdRequired: String,
@@ -184,7 +191,7 @@ val EnglishStrings = AppStrings(
     sending = "Sending...",
     sentPrefix = "Sent",
     tagWord = "tags",
-    sendErrorPrefix = "Failed to send: ",
+    systemErrorGeneric = "System error, please contact WMS Team",
     retry = "Retry",
     emptyTagList = "No tags read yet",
     searchPlaceholder = "Search EPC...",
@@ -258,6 +265,12 @@ val EnglishStrings = AppStrings(
     configInvalidToast = "Please check the invalid fields",
     versionPrefix = "Version ",
 
+    logHistoryTitle = "Log History",
+    logHistoryEmpty = "No send attempts logged yet",
+    logHistorySuccessLabel = "Sent",
+    logHistoryFailedLabel = "Failed",
+    close = "Close",
+
     errorBaseUrlFormat = "Base URL must start with http:// or https://",
     errorReaderIdRequired = "Reader ID is required",
     errorAntennaNumber = "Antenna must be a number",
@@ -288,7 +301,7 @@ val IndonesianStrings = AppStrings(
     sending = "Mengirim...",
     sentPrefix = "Terkirim",
     tagWord = "tag",
-    sendErrorPrefix = "Gagal kirim: ",
+    systemErrorGeneric = "Terjadi kesalahan sistem, silakan hubungi Tim WMS",
     retry = "Retry",
     emptyTagList = "Belum ada tag terbaca",
     searchPlaceholder = "Cari EPC...",
@@ -361,6 +374,12 @@ val IndonesianStrings = AppStrings(
     configSavedToast = "Konfigurasi tersimpan",
     configInvalidToast = "Periksa kembali input yang belum valid",
     versionPrefix = "Versi ",
+
+    logHistoryTitle = "Riwayat Log",
+    logHistoryEmpty = "Belum ada riwayat pengiriman",
+    logHistorySuccessLabel = "Terkirim",
+    logHistoryFailedLabel = "Gagal",
+    close = "Tutup",
 
     errorBaseUrlFormat = "Base URL harus diawali http:// atau https://",
     errorReaderIdRequired = "Reader ID wajib diisi",

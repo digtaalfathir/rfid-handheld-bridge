@@ -57,15 +57,16 @@
 <tr><td class="num">1</td><td>Pengenalan Aplikasi</td></tr>
 <tr><td class="num">2</td><td>Memulai: Instalasi &amp; Pemilihan Perangkat</td></tr>
 <tr><td class="num">3</td><td>Layar Utama (Scan)</td></tr>
-<tr><td class="num">4</td><td>Kualitas Sinyal (Quality)</td></tr>
-<tr><td class="num">5</td><td>Mode Barcode</td></tr>
-<tr><td class="num">6</td><td>Mode Pengiriman: WO vs Register</td></tr>
-<tr><td class="num">7</td><td>Scan Latar Belakang &amp; Bulatan Mengambang</td></tr>
-<tr><td class="num">8</td><td>Backup CSV Lokal</td></tr>
-<tr><td class="num">9</td><td>Update Aplikasi Otomatis</td></tr>
-<tr><td class="num">10</td><td>Panduan Lengkap Pengaturan</td></tr>
-<tr><td class="num">11</td><td>Bahasa Aplikasi</td></tr>
-<tr><td class="num">12</td><td>Pemecahan Masalah (Troubleshooting)</td></tr>
+<tr><td class="num">4</td><td>Jika Pengiriman Gagal &amp; Riwayat Log</td></tr>
+<tr><td class="num">5</td><td>Kualitas Sinyal (Quality)</td></tr>
+<tr><td class="num">6</td><td>Mode Barcode</td></tr>
+<tr><td class="num">7</td><td>Mode Pengiriman: WO vs Register</td></tr>
+<tr><td class="num">8</td><td>Scan Latar Belakang &amp; Bulatan Mengambang</td></tr>
+<tr><td class="num">9</td><td>Backup CSV Lokal</td></tr>
+<tr><td class="num">10</td><td>Update Aplikasi Otomatis</td></tr>
+<tr><td class="num">11</td><td>Panduan Lengkap Pengaturan</td></tr>
+<tr><td class="num">12</td><td>Bahasa Aplikasi</td></tr>
+<tr><td class="num">13</td><td>Pemecahan Masalah (Troubleshooting)</td></tr>
 </table>
 </div>
 </div>
@@ -96,9 +97,9 @@ Management (WMS). Satu aplikasi yang sama dapat dipasang di dua merek perangkat 
 </ul>
 
 <div class="tip">
-<b>Untuk siapa dokumen ini?</b> Bab 1&ndash;9 dan 12 ditulis untuk operator lapangan sehari-hari.
-Bab 10 (Pengaturan) lebih rinci dan biasanya hanya disentuh oleh admin/IT saat konfigurasi awal
-sebuah handheld.
+<b>Untuk siapa dokumen ini?</b> Bab 1&ndash;10, 12, dan 13 ditulis untuk operator lapangan
+sehari-hari. Bab 11 (Pengaturan) lebih rinci dan biasanya hanya disentuh oleh admin/IT saat
+konfigurasi awal sebuah handheld.
 </div>
 </div>
 
@@ -121,7 +122,7 @@ ulang atau datanya dihapus lewat menu Setelan Android &rarr; Aplikasi.
 
 <p>Setelah jenis perangkat dipilih, aplikasi langsung masuk ke <b>Layar Utama (Scan)</b> dan siap
 digunakan. Semua pengaturan lain (URL server, mode WO/Register, dsb.) diisi lewat menu
-<b>Pengaturan</b> &mdash; lihat Bab 10.</p>
+<b>Pengaturan</b> &mdash; lihat Bab 11.</p>
 </div>
 
 <!-- ===================== 3. LAYAR UTAMA ===================== -->
@@ -149,7 +150,8 @@ handheld. Melepas trigger sama seperti menekan Stop.</li>
   </ul>
 </li>
 <li><b>Status pengiriman</b> &mdash; setelah scan berhenti, daftar tag otomatis dikirim ke server.
-Muncul status <i>Mengirim &rarr; Terkirim (n tag)</i>, atau tombol <b>Coba Lagi</b> jika gagal.</li>
+Muncul status <i>Mengirim &rarr; Terkirim (n tag)</i>, atau pesan kegagalan (lihat Bab 4) dengan
+tombol <b>Coba Lagi</b>.</li>
 </ul>
 
 <h3>Daftar tag</h3>
@@ -157,7 +159,7 @@ Muncul status <i>Mengirim &rarr; Terkirim (n tag)</i>, atau tombol <b>Coba Lagi<
 <ul>
 <li><b>Kode EPC</b> tag (kode unik tag RFID)</li>
 <li><b>R:</b> jumlah berapa kali tag ini terbaca dalam sesi berjalan</li>
-<li><b>Kualitas</b> &mdash; lihat penjelasan lengkap di Bab 4</li>
+<li><b>Kualitas</b> &mdash; lihat penjelasan lengkap di Bab 5</li>
 <li>Label <b>BARU</b> atau <b>LAMA</b> &mdash; menandai apakah tag ini baru pertama kali terbaca
 pada sesi ini, atau sudah ada sebelumnya</li>
 <li>Ikon salin &mdash; ketuk untuk menyalin kode EPC tag tersebut</li>
@@ -173,9 +175,42 @@ EPC, dan ikon urutkan (&#8801;) untuk mengubah urutan: terbaru, EPC (A&ndash;Z),
 terbanyak, atau Kualitas terbaik.</p>
 </div>
 
-<!-- ===================== 4. KUALITAS SINYAL ===================== -->
+<!-- ===================== 4. JIKA PENGIRIMAN GAGAL ===================== -->
 <div class="chapter">
-<h2>4. Kualitas Sinyal (Quality)</h2>
+<h2>4. Jika Pengiriman Gagal &amp; Riwayat Log</h2>
+
+<p>Sebelumnya, pesan kegagalan menampilkan balasan mentah dari server apa adanya &mdash; teks
+teknis, dan bisa sangat panjang. Sekarang pesan ini disederhanakan menjadi satu baris yang mudah
+dibaca:</p>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/send-error-system.png" width="160" height="267"><div class="cap">Kode 500: pesan umum (merah)</div></td>
+<td><img src="screenshots/send-error-message.png" width="160" height="267"><div class="cap">Kode lain: pesan spesifik (biru)</div></td>
+</tr>
+</table>
+
+<ul>
+<li><b>Kode 500</b> &mdash; disederhanakan jadi satu kalimat tetap: <i>"Terjadi kesalahan sistem,
+silakan hubungi Tim WMS"</i>, ditampilkan <b>merah</b>. Penyebab asli kode 500 biasanya adalah bug
+di sistem backend, bukan sesuatu yang bisa ditindaklanjuti operator di lapangan, sehingga teks
+mentahnya sengaja tidak ditampilkan di sini.</li>
+<li><b>Kode selain 500</b> &mdash; hanya menampilkan pesan spesifik dari server (tanpa kode HTTP
+maupun format teknis lainnya), ditampilkan <b>biru</b>, karena biasanya berupa pesan validasi yang
+jelas dan berguna dibaca apa adanya.</li>
+</ul>
+
+<div class="note">
+Menyederhanakan pesan kode 500 memang sengaja menyembunyikan detail teknis dari layar &mdash;
+tapi detail itu <u>tidak hilang</u>. Setiap percobaan pengiriman (berhasil maupun gagal, RFID
+maupun barcode) tetap dicatat lengkap di <b>Pengaturan &rarr; Riwayat Log</b> (lihat Bab 11),
+sehingga admin/Tim IT tetap bisa melihat penyebab teknis sebenarnya di balik pesan umum tersebut.
+</div>
+</div>
+
+<!-- ===================== 5. KUALITAS SINYAL ===================== -->
+<div class="chapter">
+<h2>5. Kualitas Sinyal (Quality)</h2>
 
 <p>Sebelumnya, setiap baris tag menampilkan angka RSSI mentah (misalnya "-58 dBm"), nomor antena,
 dan waktu terakhir terbaca. Operator di lapangan sulit memaknai angka-angka ini, sehingga
@@ -203,9 +238,9 @@ tidak dipublikasikan dan tidak ditampilkan di aplikasi maupun dokumen ini.
 </div>
 </div>
 
-<!-- ===================== 5. MODE BARCODE ===================== -->
+<!-- ===================== 6. MODE BARCODE ===================== -->
 <div class="chapter">
-<h2>5. Mode Barcode</h2>
+<h2>6. Mode Barcode</h2>
 
 <p>Selain RFID, aplikasi ini juga bisa dipakai untuk memindai <b>barcode 1D/2D</b> menggunakan
 pemindai bawaan handheld. Mode ini diaktifkan dari menu <b>Pengaturan &rarr; Mode Scan</b>, dan
@@ -240,16 +275,16 @@ pengiriman: <b>Mengirim&hellip;</b>, <b>Terkirim</b> (hijau), atau <b>Gagal</b> 
 <ul>
 <li>Pengaturan <b>Power</b> (kekuatan pancar RF) otomatis disembunyikan saat Mode Barcode aktif,
 karena tidak relevan untuk pemindaian barcode.</li>
-<li>Backup CSV lokal (Bab 8) <u>tidak</u> mencakup hasil Mode Barcode &mdash; backup itu khusus
+<li>Backup CSV lokal (Bab 9) <u>tidak</u> mencakup hasil Mode Barcode &mdash; backup itu khusus
 untuk sesi RFID, karena setiap barcode sudah langsung terkirim satu per satu, bukan
 dikumpulkan dulu.</li>
 </ul>
 </div>
 </div>
 
-<!-- ===================== 6. WO vs REGISTER ===================== -->
+<!-- ===================== 7. WO vs REGISTER ===================== -->
 <div class="chapter">
-<h2>6. Mode Pengiriman: WO vs Register</h2>
+<h2>7. Mode Pengiriman: WO vs Register</h2>
 
 <p>Terlepas dari Mode Scan (RFID/Barcode) di atas, ada satu pengaturan lagi yang menentukan
 <i>ke alur bisnis mana</i> hasil scan dikirim: <b>WO</b> atau <b>Register</b>. Diatur dari
@@ -271,9 +306,9 @@ memperbarui stok saat itu juga.
 </div>
 </div>
 
-<!-- ===================== 7. LATAR BELAKANG ===================== -->
+<!-- ===================== 8. LATAR BELAKANG ===================== -->
 <div class="chapter">
-<h2>7. Scan Latar Belakang &amp; Bulatan Mengambang</h2>
+<h2>8. Scan Latar Belakang &amp; Bulatan Mengambang</h2>
 
 <p>Fitur ini <b>mati secara default</b>. Jika diaktifkan lewat <b>Pengaturan &rarr; Scan Latar
 Belakang</b>, dua hal berubah:</p>
@@ -307,9 +342,9 @@ fitur ini aktif &mdash; ini adalah ketentuan standar Android, bukan bug.
 </div>
 </div>
 
-<!-- ===================== 8. BACKUP CSV ===================== -->
+<!-- ===================== 9. BACKUP CSV ===================== -->
 <div class="chapter">
-<h2>8. Backup CSV Lokal</h2>
+<h2>9. Backup CSV Lokal</h2>
 
 <p>Fitur ini <b>menyala secara default</b>, diatur lewat <b>Pengaturan &rarr; Backup Lokal</b>.
 Setiap kali sesi scan RFID berhenti &mdash; berhasil terkirim maupun tidak &mdash; seluruh daftar
@@ -323,14 +358,14 @@ jaring pengaman apabila koneksi WiFi gudang sedang tidak stabil.</p>
 <code>epc, first_seen, last_seen, read_count, antenna, rssi, is_new</code>.</p>
 
 <div class="note">
-Backup ini hanya berlaku untuk sesi <b>Mode RFID</b>. Hasil <b>Mode Barcode</b> (Bab 5) tidak
+Backup ini hanya berlaku untuk sesi <b>Mode RFID</b>. Hasil <b>Mode Barcode</b> (Bab 6) tidak
 dibackup ke CSV karena setiap kode sudah langsung dikirim satu per satu ke server.
 </div>
 </div>
 
-<!-- ===================== 9. UPDATE OTOMATIS ===================== -->
+<!-- ===================== 10. UPDATE OTOMATIS ===================== -->
 <div class="chapter">
-<h2>9. Update Aplikasi Otomatis</h2>
+<h2>10. Update Aplikasi Otomatis</h2>
 
 <p>Aplikasi secara otomatis memeriksa versi terbaru setiap kali dibuka, dan setiap kembali ke
 layar depan (paling cepat setiap 5 menit sekali). Jika tersedia versi baru, muncul kartu
@@ -349,23 +384,23 @@ notifikasi di Layar Scan:</p>
 handheld lewat internet.</p>
 </div>
 
-<!-- ===================== 10. PENGATURAN ===================== -->
+<!-- ===================== 11. PENGATURAN ===================== -->
 <div class="chapter">
-<h2>10. Panduan Lengkap Pengaturan</h2>
+<h2>11. Panduan Lengkap Pengaturan</h2>
 
 <p>Bab ini menjelaskan setiap bagian di menu <b>Pengaturan</b>, dari atas ke bawah. Bagian ini
 biasanya hanya perlu disentuh sekali oleh admin/IT saat konfigurasi awal sebuah handheld.</p>
 
-<h3>10.1 Mode Scan &amp; Mode</h3>
+<h3>11.1 Mode Scan &amp; Mode</h3>
 <div class="shot">
   <img src="screenshots/settings-scan-mode-and-mode.png" width="190" height="317">
 </div>
 <ul>
-<li><b>Mode Scan</b> &mdash; RFID / Barcode, lihat Bab 5</li>
-<li><b>Mode</b> &mdash; WO / Register, lihat Bab 6</li>
+<li><b>Mode Scan</b> &mdash; RFID / Barcode, lihat Bab 6</li>
+<li><b>Mode</b> &mdash; WO / Register, lihat Bab 7</li>
 </ul>
 
-<h3>10.2 Konfigurasi API</h3>
+<h3>11.2 Konfigurasi API</h3>
 <div class="shot">
   <img src="screenshots/settings-api-config.png" width="190" height="317">
 </div>
@@ -377,7 +412,7 @@ punya ID unik tanpa perlu diatur manual</li>
 <li><b>Antenna</b> &mdash; nomor antena yang dipakai</li>
 </ul>
 
-<h3>10.3 Tes &amp; Ambil Data, dan Register Configuration</h3>
+<h3>11.3 Tes &amp; Ambil Data, dan Register Configuration</h3>
 <div class="shot">
   <img src="screenshots/settings-test-connection-register.png" width="190" height="317">
 </div>
@@ -397,7 +432,7 @@ di perangkat, jadi tidak perlu ditekan ulang setiap kali membuka Pengaturan, kec
 berubah di server.
 </div>
 
-<h3>10.4 Power</h3>
+<h3>11.4 Power</h3>
 <div class="shot">
   <img src="screenshots/settings-register-power.png" width="190" height="317">
 </div>
@@ -405,20 +440,33 @@ berubah di server.
 1&ndash;30 dBm, Zebra 0&ndash;300 (sama seperti aplikasi resmi 123RFID milik Zebra). Bagian ini
 otomatis disembunyikan saat Mode Barcode aktif.</p>
 
-<h3>10.5 Suara</h3>
+<h3>11.5 Suara</h3>
 <div class="shot">
   <img src="screenshots/settings-power-sound.png" width="190" height="317">
 </div>
 <p>Bunyi setiap kali tag/barcode berhasil terbaca, bisa dimatikan, lengkap dengan pengatur
 volume.</p>
 
-<h3>10.6 Backup Lokal, Scan Latar Belakang &amp; Bahasa</h3>
+<h3>11.6 Backup Lokal, Scan Latar Belakang &amp; Bahasa</h3>
 <div class="shot">
   <img src="screenshots/settings-backup-bgscan-lang.png" width="190" height="317">
 </div>
-<p>Lihat Bab 7, Bab 8, dan Bab 11 untuk penjelasan masing-masing.</p>
+<p>Lihat Bab 8, Bab 9, dan Bab 12 untuk penjelasan masing-masing.</p>
 
-<h3>10.7 Reset &amp; Simpan</h3>
+<h3>11.7 Riwayat Log</h3>
+<p>Tombol ini membuka daftar 10 percobaan pengiriman terakhir (RFID maupun Barcode), lengkap
+dengan detail teknis aslinya &mdash; lihat Bab 4 untuk penjelasan lengkapnya. Riwayat ini tetap
+tersimpan walau tombol <b>Reset</b> di bawah ditekan, karena ini catatan diagnostik, bukan bagian
+dari pengaturan.</p>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/settings-log-history-section.png" width="160" height="267"><div class="cap">Tombol Riwayat Log</div></td>
+<td><img src="screenshots/settings-log-history-dialog.png" width="160" height="267"><div class="cap">Isi riwayat, dengan detail teknis lengkap</div></td>
+</tr>
+</table>
+
+<h3>11.8 Reset &amp; Simpan</h3>
 <div class="shot">
   <img src="screenshots/settings-lang-reset-save.png" width="190" height="317">
 </div>
@@ -430,18 +478,18 @@ terpasang ditampilkan tepat di bawah tombol ini</li>
 </ul>
 </div>
 
-<!-- ===================== 11. BAHASA ===================== -->
+<!-- ===================== 12. BAHASA ===================== -->
 <div class="chapter">
-<h2>11. Bahasa Aplikasi</h2>
+<h2>12. Bahasa Aplikasi</h2>
 
 <p>Tersedia dalam Bahasa Indonesia dan Inggris, bisa diganti kapan saja lewat menu Pengaturan,
 dan berlaku instan ke seluruh layar &mdash; termasuk notifikasi dan pesan validasi. Secara
 bawaan, aplikasi terpasang dalam Bahasa Inggris hingga diganti manual.</p>
 </div>
 
-<!-- ===================== 12. TROUBLESHOOTING ===================== -->
+<!-- ===================== 13. TROUBLESHOOTING ===================== -->
 <div class="chapter">
-<h2>12. Pemecahan Masalah (Troubleshooting)</h2>
+<h2>13. Pemecahan Masalah (Troubleshooting)</h2>
 
 <table class="ref">
 <tr><th>Gejala</th><th>Penjelasan &amp; solusi</th></tr>
@@ -474,6 +522,12 @@ tim IT untuk memasang ulang aplikasi ke versi resmi.</td>
 <td>Aplikasi mengunduh file update (beberapa MB) lewat jaringan handheld; pada WiFi gudang yang
 lambat, percobaan pertama kadang gagal. Tekan <b>Update Sekarang</b> sekali lagi untuk mencoba
 ulang.</td>
+</tr>
+<tr>
+<td>Pesan gagal kirim hanya menampilkan "Terjadi kesalahan sistem, silakan hubungi Tim WMS" tanpa
+detail</td>
+<td>Ini disengaja (lihat Bab 4) &mdash; detail teknis aslinya tidak hilang, cek
+<b>Pengaturan &rarr; Riwayat Log</b> (Bab 11.7) untuk melihatnya sebelum menghubungi Tim WMS.</td>
 </tr>
 </table>
 

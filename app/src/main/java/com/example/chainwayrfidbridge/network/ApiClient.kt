@@ -42,7 +42,10 @@ class ApiClient {
             val request = Request.Builder().url(config.fullApiUrl()).post(body).build()
 
             client.newCall(request).execute().use { resp ->
-                if (resp.isSuccessful) null else "HTTP ${resp.code} ${resp.body?.string().orEmpty().take(200)}"
+                // Full, untruncated body: the caller both parses it as JSON for a clean on-screen
+                // message and keeps the raw text around for Settings' log history — a truncated
+                // body would silently break the former and shortchange the latter.
+                if (resp.isSuccessful) null else "HTTP ${resp.code} ${resp.body?.string().orEmpty()}"
             }
         } catch (e: Exception) {
             e.message ?: e.javaClass.simpleName

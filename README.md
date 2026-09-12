@@ -12,6 +12,7 @@ This document is both a user guide (what every screen and setting does) and a de
 - [Overview](#overview)
 - [First launch: choosing your device](#first-launch-choosing-your-device)
 - [The Scan screen](#the-scan-screen)
+- [Send errors & log history](#send-errors--log-history)
 - [Signal Quality](#signal-quality)
 - [Barcode mode](#barcode-mode)
 - [Sending scans: WO vs Register mode](#sending-scans-wo-vs-register-mode)
@@ -60,7 +61,9 @@ The main screen, and the only one an operator needs day to day.
   everything and starts fresh, **Continue** keeps existing tags and resumes scanning (useful for
   scanning a large area in passes without losing earlier reads)
 - **Send status** — after a scan stops, the collected tags post to your API automatically; a
-  banner shows Sending → Sent (n tags) or a Retry button on failure
+  banner shows Sending → Sent (n tags) or a Retry button on failure. On failure, the banner shows
+  a plain-language message rather than the raw server response — see
+  [Send errors & log history](#send-errors--log-history)
 
 - **Tag list** — sorted and searchable; each row shows the EPC, read count (`R:`), a **Quality**
   label, and a **NEW** / **EXISTING** badge (whether this tag was already in the list before the
@@ -68,6 +71,26 @@ The main screen, and the only one an operator needs day to day.
 - **Search & sort** — filter by EPC substring; sort by most recent, EPC (A–Z), read count, or Quality
 
 ![Tag row showing read count and a Strong-quality tag](docs/screenshots/scan-quality-strong.png)
+
+## Send errors & log history
+
+A failed send used to show the raw server response verbatim — e.g. `Gagal kirim: HTTP 500
+{"status":false,"code":500,"message":"..."}` — technical, and potentially very long. It's now
+turned into one plain-language line instead:
+
+- **HTTP 500** — generalized to a single fixed message ("System error, please contact WMS Team" /
+  Indonesian equivalent) in **red**. A 500's actual cause is a backend bug, not something an
+  operator can act on, so the raw text is deliberately not shown here.
+- **Any other HTTP status** — shows only the response body's `message` field (nothing else) in
+  **blue**, since that's normally a specific, readable validation message worth reading as-is.
+- Anything that isn't a parsed HTTP response at all (a network/timeout exception, or a body that
+  didn't parse) falls back to showing the raw text, in red.
+
+Generalizing the 500 case intentionally throws away detail on screen — so nothing is lost, every
+send attempt (success or failure, RFID batch or barcode) is also written to a small on-device log:
+**Settings → Log History** shows the last 10 attempts with their full, untouched raw detail
+(HTTP status + response body, or the exception message), so a WMS admin can still see exactly what
+a generalized "System error" actually was.
 
 ## Signal Quality
 
@@ -233,6 +256,9 @@ Every section, top to bottom, each with its own icon:
 
 ![Local Backup, Background Scanning, and Language](docs/screenshots/settings-backup-bgscan-lang.png)
 
+- **Log History** — opens the last 10 send attempts with their full raw detail; see
+  [Send errors & log history](#send-errors--log-history). Survives "Reset" (it's device-level
+  diagnostic data, not a setting)
 - **Reset** — clears everything above back to defaults (never touches device type or language)
 - **Save** — validates and persists; the app's current version is shown just below this row
 
@@ -292,6 +318,8 @@ app/src/main/java/com/example/chainwayrfidbridge/
 │   ├── InputMode.kt             # RFID | Barcode, persisted per device
 │   ├── TagQuality.kt            # Strong/Medium/Weak classification from RSSI + read count
 │   ├── BarcodeScanRecord.kt     # One decoded barcode + its send status
+│   ├── FactoryCodeOption.kt     # Fetched Factory Code entry: code (sent) + name (display only)
+│   ├── SendLogEntry.kt          # One send attempt's full raw detail, for Settings' Log History
 │   └── TagRecord.kt
 ├── rfid/
 │   ├── RfidReaderManager.kt     # Vendor-agnostic interface both backends implement
@@ -303,6 +331,7 @@ app/src/main/java/com/example/chainwayrfidbridge/
 │   └── ZebraBarcodeManager.kt   # DataWedge profile + intent-output receiver
 ├── network/
 │   ├── ApiClient.kt             # POSTs scanned tags/barcodes to the configured endpoint
+│   ├── SendErrorFormatter.kt    # Raw send failure -> plain-language display message + color
 │   └── UpdateClient.kt          # GitHub Releases version check + APK download
 ├── service/
 │   ├── ScanStateBus.kt          # Shared scan-state mirror (Service has no ViewModel of its own)
