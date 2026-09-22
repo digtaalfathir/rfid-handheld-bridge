@@ -24,8 +24,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # No explicit Android SDK setup step: ubuntu-latest runners ship one preinstalled
+      # (ANDROID_HOME already set, build-tools already present) — android-actions/setup-android@v3
+      # used to sit here "topping it up," but it unconditionally tries to install the legacy
+      # `tools` package, which Google removed from the SDK repository entirely, so every fresh run
+      # now hard-fails on "Failed to find package 'tools'". The step was redundant anyway.
 
       # Vendor SDKs are proprietary and gitignored (see app/libs/README.txt), and too large for a
       # GitHub Actions secret (64 KB limit) — instead they're attached as assets on a one-time
