@@ -9,11 +9,14 @@ def ciVersionCode = (project.findProperty("appVersionCode") as String)?.toIntege
 def ciVersionName = (project.findProperty("appVersionName") as String) ?: "1.1"
 
 android {
-    namespace 'com.example.chainwayrfidbridge'
+    namespace 'com.stechoq.wms'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.chainwayrfidbridge"
+        // Rebranded from com.example.chainwayrfidbridge — Android treats this as a wholly
+        // different app, so it does NOT auto-update over an old install; every already-deployed
+        // handheld needs a one-time manual uninstall + reinstall of the new APK.
+        applicationId "com.stechoq.wms"
         minSdk 21
         // Kept below 33 on purpose: the Zebra RFID SDK's Readers class registers a broadcast
         // receiver without RECEIVER_EXPORTED/RECEIVER_NOT_EXPORTED, which Android turns into a

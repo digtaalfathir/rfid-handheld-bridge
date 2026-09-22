@@ -1,4 +1,4 @@
-# Stechoq RFID Suite
+# WMS RFID Suite
 
 A native Android app for scanning UHF RFID tags on warehouse handhelds and pushing the results to
 a warehouse-management API. Built for **Chainway C72** and **Zebra** (MC33 / MC3300x) devices from
@@ -191,7 +191,7 @@ On by default, in Settings → Local Backup. Every time a scan session stops (su
 the full tag list for that session is written to a CSV file on the device, independent of whether
 the send to your server succeeded — a safety net for spotty warehouse WiFi.
 
-Files land in `Android/data/com.example.chainwayrfidbridge/files/rfid_stc/` on the device's
+Files land in `Android/data/com.stechoq.wms/files/rfid_stc/` on the device's
 storage (created automatically if it doesn't exist yet), named `scan_YYYYMMDD_HHMMSS.csv`, one
 file per scan session with columns: `epc, first_seen, last_seen, read_count, antenna, rssi,
 is_new`.
@@ -305,7 +305,7 @@ string table, so nothing drifts out of sync between languages.
 ### Project layout
 
 ```
-app/src/main/java/com/example/chainwayrfidbridge/
+app/src/main/java/com/stechoq/wms/
 ├── MainActivity.kt              # Nav host, language CompositionLocal, physical trigger key events
 ├── RfidBridgeApplication.kt     # Process-wide foreground/background watcher for the floating bubble
 ├── ScanViewModel.kt             # Scan session state, tag buffer, beep, CSV backup, send, self-update
@@ -391,6 +391,14 @@ every push to `main` — no manual build or upload step, ever. Each run:
 
 Deployed handhelds pick it up automatically per [Self-update](#self-update) above.
 
+> **One-time exception — the WMS rebrand:** this app's `applicationId` changed from
+> `com.example.chainwayrfidbridge` to `com.stechoq.wms` as part of rebranding away from the
+> Chainway-specific old name. Android treats a different `applicationId` as an entirely different
+> app, so self-update **cannot** carry an already-deployed handheld across this one change — it
+> needs a one-time manual uninstall of the old app and install of the new APK (local settings on
+> that handheld are lost; the device type/language choice and Settings will need re-entering).
+> Every release after this one updates normally again.
+
 #### One-time CI setup
 
 Vendor SDKs are proprietary and too large for a GitHub Actions secret (64 KB limit), so they're
@@ -400,7 +408,7 @@ restored from a dedicated release instead of committed to the repo:
 gh release create vendor-sdks \
   app/libs/DeviceAPI_ver20251103_release.aar \
   app/libs/API3_LIB-release-2.0.1.29.aar \
-  --title "Vendor SDKs (CI only)" \
+  --title "Vendor SDKs (CI only)" \   
   --notes "Restored into app/libs/ by release.yml — not part of the app's own release history."
 ```
 

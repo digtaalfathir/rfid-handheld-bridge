@@ -2,14 +2,15 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Buku Panduan Penggunaan - Stechoq RFID Suite</title>
+<title>Buku Panduan Penggunaan - WMS RFID Suite</title>
 <style>
   @page { size: A4; margin: 2cm 1.8cm; }
   body { font-family: "Helvetica", "Arial", sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; }
   h1 { font-size: 22pt; color: #0D47A1; margin-top: 0; }
   h2 { font-size: 16pt; color: #0D47A1; border-bottom: 2px solid #1565C0; padding-bottom: 4px; margin-top: 0; page-break-before: always; }
   h3 { font-size: 13pt; color: #1565C0; margin-bottom: 4px; }
-  .cover { text-align: center; padding-top: 5cm; }
+  .cover { text-align: center; padding-top: 3cm; }
+  .cover-logo { width: 260px; margin-bottom: 30px; }
   .cover .badge { display: inline-block; background: #1565C0; color: white; padding: 10px 24px; border-radius: 20px; font-size: 13pt; margin-bottom: 40px; }
   .cover h1 { font-size: 30pt; margin-bottom: 6px; }
   .cover .subtitle { font-size: 15pt; color: #555; margin-bottom: 60px; }
@@ -40,12 +41,13 @@
 
 <!-- ===================== COVER ===================== -->
 <div class="cover">
-  <div class="badge">STECHOQ RFID SUITE</div>
+  <img src="assets/logo.png" class="cover-logo" width="260" height="208">
+  <div class="badge">WMS RFID SUITE</div>
   <h1>Buku Panduan Penggunaan</h1>
   <div class="subtitle">Aplikasi Scan RFID &amp; Barcode untuk Handheld<br>Chainway C72 &amp; Zebra MC33 / MC3300x</div>
   <div class="meta">
-    Versi Aplikasi 1.3.x &nbsp;&bull;&nbsp; Edisi Agustus 2026<br>
-    Dokumen internal Stechoq &mdash; untuk operator gudang dan tim IT
+    Versi Aplikasi 1.5.x &nbsp;&bull;&nbsp; Edisi September 2026<br>
+    Dokumen internal &mdash; untuk operator gudang dan tim IT
   </div>
 </div>
 
@@ -75,7 +77,7 @@
 <div class="chapter">
 <h2>1. Pengenalan Aplikasi</h2>
 
-<p><b>Stechoq RFID Suite</b> adalah aplikasi Android untuk membaca tag RFID UHF dan barcode
+<p><b>WMS RFID Suite</b> adalah aplikasi Android untuk membaca tag RFID UHF dan barcode
 menggunakan handheld gudang, lalu mengirim hasilnya secara otomatis ke sistem Warehouse
 Management (WMS). Satu aplikasi yang sama dapat dipasang di dua merek perangkat berbeda:</p>
 
@@ -352,7 +354,7 @@ tag pada sesi tersebut otomatis disimpan ke file CSV di penyimpanan perangkat. F
 jaring pengaman apabila koneksi WiFi gudang sedang tidak stabil.</p>
 
 <p>File tersimpan otomatis di folder:</p>
-<p><code>Android/data/com.example.chainwayrfidbridge/files/rfid_stc/</code></p>
+<p><code>Android/data/com.stechoq.wms/files/rfid_stc/</code></p>
 
 <p>satu file per sesi scan, dengan nama <code>scan_YYYYMMDD_HHMMSS.csv</code>, berisi kolom:
 <code>epc, first_seen, last_seen, read_count, antenna, rssi, is_new</code>.</p>
@@ -382,6 +384,14 @@ notifikasi di Layar Scan:</p>
 
 <p>Tidak perlu laptop, kabel data, atau transfer APK manual &mdash; semua dilakukan langsung dari
 handheld lewat internet.</p>
+
+<div class="note">
+<b>Khusus sekali saja, saat rebranding ke WMS RFID Suite:</b> aplikasi lama ("Stechoq RFID
+Suite") tidak bisa ter-update otomatis ke versi baru ini, karena identitas aplikasinya berubah
+total di sisi Android. Tim IT perlu meng-uninstall aplikasi lama lalu memasang APK baru secara
+manual satu kali di setiap handheld &mdash; Pengaturan pada handheld tersebut perlu diisi ulang
+setelahnya. Setelah proses ini selesai, update otomatis berjalan normal kembali seperti biasa.
+</div>
 </div>
 
 <!-- ===================== 11. PENGATURAN ===================== -->
@@ -532,7 +542,7 @@ detail</td>
 </table>
 
 <div class="footer-note">
-Stechoq RFID Suite &mdash; Buku Panduan Penggunaan &bull; Dokumen ini dibuat untuk keperluan
+WMS RFID Suite &mdash; Buku Panduan Penggunaan &bull; Dokumen ini dibuat untuk keperluan
 internal dan akan diperbarui mengikuti perkembangan aplikasi.
 </div>
 </div>
