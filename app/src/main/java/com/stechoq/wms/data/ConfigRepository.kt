@@ -77,28 +77,35 @@ class ConfigRepository(context: Context) {
     private val powerRange: IntRange get() = loadDeviceType()?.powerRange ?: DeviceType.CHAINWAY.powerRange
     private val defaultPower: Int get() = loadDeviceType()?.defaultPower ?: DeviceType.CHAINWAY.defaultPower
 
-    fun load(): ScanConfig = ScanConfig(
-        mode = ScanMode.fromKey(prefs.getString("mode", defaults.mode.key)),
-        inputMode = InputMode.fromKey(prefs.getString("input_mode", defaults.inputMode.key)),
-        baseUrl = prefs.getString("base_url", defaults.baseUrl) ?: defaults.baseUrl,
-        endpoint = prefs.getString("endpoint", defaults.endpoint) ?: defaults.endpoint,
-        readerId = deviceReaderId,
-        antenna = prefs.getString("antenna", defaults.antenna) ?: defaults.antenna,
-        rrType = prefs.getString("rr_type", defaults.rrType) ?: defaults.rrType,
-        makerName = prefs.getString("maker_name", defaults.makerName) ?: defaults.makerName,
-        initialYear = prefs.getString("initial_year", defaults.initialYear) ?: defaults.initialYear,
-        factoryCode = prefs.getString("factory_code", defaults.factoryCode) ?: defaults.factoryCode,
-        opname = prefs.getBoolean("opname", defaults.opname),
-        // Clamp defensively: a value saved under a since-changed valid range (or any other
-        // stale/corrupt data) should never surface as an out-of-range number in the UI. Range is
-        // device-specific (Chainway 1-30, Zebra 0-300), not a single shared scale.
-        power = prefs.getInt("power", defaultPower).coerceIn(powerRange.first, powerRange.last),
-        soundEnabled = prefs.getBoolean("sound_enabled", defaults.soundEnabled),
-        soundVolume = prefs.getInt("sound_volume", defaults.soundVolume)
-            .coerceIn(ScanConfig.MIN_VOLUME, ScanConfig.MAX_VOLUME),
-        localCsvEnabled = prefs.getBoolean("local_csv_enabled", defaults.localCsvEnabled),
-        backgroundScanEnabled = prefs.getBoolean("background_scan_enabled", defaults.backgroundScanEnabled)
-    )
+    fun load(): ScanConfig {
+        val replacementModeEnabled = prefs.getBoolean("replacement_mode_enabled", defaults.replacementModeEnabled)
+        return ScanConfig(
+            mode = ScanMode.fromKey(prefs.getString("mode", defaults.mode.key)),
+            inputMode = InputMode.fromKey(prefs.getString("input_mode", defaults.inputMode.key)),
+            baseUrl = prefs.getString("base_url", defaults.baseUrl) ?: defaults.baseUrl,
+            endpoint = prefs.getString("endpoint", defaults.endpoint) ?: defaults.endpoint,
+            readerId = deviceReaderId,
+            antenna = prefs.getString("antenna", defaults.antenna) ?: defaults.antenna,
+            rrType = prefs.getString("rr_type", defaults.rrType) ?: defaults.rrType,
+            makerName = prefs.getString("maker_name", defaults.makerName) ?: defaults.makerName,
+            initialYear = prefs.getString("initial_year", defaults.initialYear) ?: defaults.initialYear,
+            factoryCode = prefs.getString("factory_code", defaults.factoryCode) ?: defaults.factoryCode,
+            factoryId = prefs.getInt("factory_id", defaults.factoryId),
+            // Replacement always implies opname (see saveConfig/SettingsScreen) — OR'd in here too
+            // so a row saved before that rule existed self-heals on the very next load, not just save.
+            opname = prefs.getBoolean("opname", defaults.opname) || replacementModeEnabled,
+            replacementModeEnabled = replacementModeEnabled,
+            // Clamp defensively: a value saved under a since-changed valid range (or any other
+            // stale/corrupt data) should never surface as an out-of-range number in the UI. Range is
+            // device-specific (Chainway 1-30, Zebra 0-300), not a single shared scale.
+            power = prefs.getInt("power", defaultPower).coerceIn(powerRange.first, powerRange.last),
+            soundEnabled = prefs.getBoolean("sound_enabled", defaults.soundEnabled),
+            soundVolume = prefs.getInt("sound_volume", defaults.soundVolume)
+                .coerceIn(ScanConfig.MIN_VOLUME, ScanConfig.MAX_VOLUME),
+            localCsvEnabled = prefs.getBoolean("local_csv_enabled", defaults.localCsvEnabled),
+            backgroundScanEnabled = prefs.getBoolean("background_scan_enabled", defaults.backgroundScanEnabled)
+        )
+    }
 
     fun save(config: ScanConfig) {
         prefs.edit()
@@ -112,7 +119,9 @@ class ConfigRepository(context: Context) {
             .putString("maker_name", config.makerName)
             .putString("initial_year", config.initialYear)
             .putString("factory_code", config.factoryCode)
+            .putInt("factory_id", config.factoryId)
             .putBoolean("opname", config.opname)
+            .putBoolean("replacement_mode_enabled", config.replacementModeEnabled)
             .putInt("power", config.power)
             .putBoolean("sound_enabled", config.soundEnabled)
             .putInt("sound_volume", config.soundVolume)
@@ -152,7 +161,7 @@ class ConfigRepository(context: Context) {
             val arr = JSONArray(raw)
             (0 until arr.length()).map {
                 val o = arr.getJSONObject(it)
-                FactoryCodeOption(o.getString("code"), o.getString("name"))
+                FactoryCodeOption(o.optInt("id"), o.getString("code"), o.getString("name"))
             }
         } catch (e: Exception) {
             emptyList()
@@ -161,7 +170,7 @@ class ConfigRepository(context: Context) {
 
     fun saveFactoryCodeOptions(options: List<FactoryCodeOption>) {
         val arr = JSONArray()
-        options.forEach { arr.put(JSONObject().put("code", it.code).put("name", it.name)) }
+        options.forEach { arr.put(JSONObject().put("id", it.id).put("code", it.code).put("name", it.name)) }
         prefs.edit().putString("cached_factory_codes", arr.toString()).apply()
     }
 

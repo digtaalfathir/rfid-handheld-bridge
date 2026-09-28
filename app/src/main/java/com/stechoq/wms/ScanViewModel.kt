@@ -18,7 +18,9 @@ import com.stechoq.wms.data.ConfigRepository
 import com.stechoq.wms.data.DeviceType
 import com.stechoq.wms.data.FactoryCodeOption
 import com.stechoq.wms.data.InputMode
+import com.stechoq.wms.data.ReplacementReason
 import com.stechoq.wms.data.ScanConfig
+import com.stechoq.wms.data.ScanMode
 import com.stechoq.wms.data.SendLogEntry
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
@@ -72,6 +74,15 @@ sealed class SendStatus {
     data class Error(val message: String) : SendStatus()
 }
 
+/** State for the "replace a damaged tag" modal — shown mid-scan (Register mode + Replacement
+ * enabled) the instant a single tag is detected. [newRfid] is that scanned tag; [submitting]/
+ * [error] track the in-flight POST once the operator fills in the rest and taps Submit. */
+data class ReplacementPrompt(
+    val newRfid: String,
+    val submitting: Boolean = false,
+    val error: String? = null
+)
+
 sealed class UpdateStatus {
     object Idle : UpdateStatus()
     data class Available(val info: UpdateInfo) : UpdateStatus()
@@ -91,7 +102,8 @@ data class ScanUiState(
     val searchQuery: String = "",
     val sortOption: SortOption = SortOption.LAST_SEEN_DESC,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
-    val barcodeScans: List<BarcodeScanRecord> = emptyList()
+    val barcodeScans: List<BarcodeScanRecord> = emptyList(),
+    val replacementPrompt: ReplacementPrompt? = null
 )
 
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
@@ -114,6 +126,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     private val tagMap = LinkedHashMap<String, TagRecord>()
     private var sessionBaselineEpcs: Set<String> = emptySet()
     private val transitioning = AtomicBoolean(false)
+    // Guards the replacement-mode auto-stop so it fires at most once per scan — onTagRead can run
+    // several times before stopInventory() actually takes effect on the hardware.
+    private val replacementPromptShown = AtomicBoolean(false)
     private var toneGenerator: ToneGenerator? = null
     private var toneGeneratorVolume: Int = -1
     private var lastBeepAtMs = 0L
@@ -300,6 +315,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun beginInventory() {
+        replacementPromptShown.set(false)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val error = reader.startInventory(::onTagRead)
@@ -329,13 +345,23 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Runs on the reader's poll thread at hardware read speed — keep this cheap, no sorting/UI work here. */
     private fun onTagRead(epc: String, rssi: String) {
         val now = System.currentTimeMillis()
-        synchronized(tagMap) {
+        val tagCount = synchronized(tagMap) {
             val existing = tagMap[epc]
             tagMap[epc] = if (existing == null) {
                 TagRecord(epc, now, now, 1, _config.value.antenna, rssi, isNew = epc !in sessionBaselineEpcs)
             } else {
                 existing.copy(lastSeen = now, readCount = existing.readCount + 1, rssi = rssi)
             }
+            tagMap.size
+        }
+        // Replacement mode wants exactly one tag — the physical replacement being registered —
+        // not a batch, so the instant that first (and, until Submit/Cancel, only) tag shows up,
+        // stop immediately rather than let inventory keep running. Guarded so this only fires once
+        // per scan even though this callback keeps firing on the poll thread until the stop lands.
+        if (_config.value.mode == ScanMode.REGISTER && _config.value.replacementModeEnabled &&
+            tagCount == 1 && replacementPromptShown.compareAndSet(false, true)
+        ) {
+            stopForReplacementPrompt(epc)
         }
         // Beep on every read (new or already-seen) so the operator still hears that tags are
         // being detected, not just on first discovery — but throttled to a fixed interval rather
@@ -386,6 +412,61 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             saveCsvBackup(snapshot)
             sendSnapshot(snapshot)
         }
+    }
+
+    /** Replacement mode's auto-stop: reached exactly one tag mid-scan, so stop inventory
+     * immediately and show the replacement modal instead of continuing to batch-scan or
+     * auto-sending anything — submitReplacement() below posts to a completely different endpoint
+     * than the normal tag batch. */
+    private fun stopForReplacementPrompt(epc: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                uiRefreshJob?.cancel()
+                uiRefreshJob = null
+                reader.stopInventory()
+            } finally {
+                transitioning.set(false)
+            }
+            publishTags()
+            _uiState.update {
+                it.copy(
+                    scanning = false,
+                    lastScanTime = System.currentTimeMillis(),
+                    replacementPrompt = ReplacementPrompt(epc)
+                )
+            }
+            ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+        }
+    }
+
+    /** Submits the replacement; [onResult] lets the caller show a one-shot success toast (same
+     * callback shape as testConnection/fetchDropdownData below) — failure is instead reflected
+     * inline via the prompt's own [ReplacementPrompt.error], so the modal stays open with the
+     * fields intact for a retry rather than needing the tag re-scanned. */
+    fun submitReplacement(oldRfid: String, reason: ReplacementReason, onResult: (Boolean) -> Unit) {
+        val prompt = _uiState.value.replacementPrompt ?: return
+        _uiState.update { it.copy(replacementPrompt = prompt.copy(submitting = true, error = null)) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val error = api.replaceRfid(_config.value, oldRfid, prompt.newRfid, reason.wireValue)
+            configRepo.appendSendLog(
+                SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK (replace ${prompt.newRfid})")
+            )
+            if (error == null) {
+                synchronized(tagMap) { tagMap.clear() }
+                publishTags()
+            }
+            _uiState.update {
+                it.copy(replacementPrompt = if (error == null) null else prompt.copy(submitting = false, error = error))
+            }
+            withContext(Dispatchers.Main) { onResult(error == null) }
+        }
+    }
+
+    /** Discards the scanned tag and closes the modal without submitting anything. */
+    fun cancelReplacement() {
+        _uiState.update { it.copy(replacementPrompt = null) }
+        synchronized(tagMap) { tagMap.clear() }
+        publishTags()
     }
 
     /** Local backup, independent of whether the API send below succeeds — best-effort, never
@@ -476,7 +557,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Returns field->error map; empty means the config was valid and got saved. */
-    fun saveConfig(newConfig: ScanConfig): Map<String, ValidationErrorType> {
+    fun saveConfig(rawConfig: ScanConfig): Map<String, ValidationErrorType> {
+        // Replacement always implies opname — enforced here too, not just in the Settings UI's
+        // checkbox lock, so a config saved from anywhere can never persist the two disagreeing.
+        val newConfig = if (rawConfig.replacementModeEnabled) rawConfig.copy(opname = true) else rawConfig
         val errors = newConfig.validate(reader.powerRange)
         if (errors.isEmpty()) {
             val inputModeChanged = newConfig.inputMode != _config.value.inputMode

@@ -5,6 +5,7 @@ import com.stechoq.wms.SortOption
 import com.stechoq.wms.data.AppLanguage
 import com.stechoq.wms.data.DeviceType
 import com.stechoq.wms.data.InputMode
+import com.stechoq.wms.data.ReplacementReason
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.ValidationErrorType
 
@@ -90,6 +91,18 @@ data class AppStrings(
     val initialYearLabel: String,
     val factoryCodeLabel: String,
     val opnameLabel: String,
+    val replacementModeLabel: String,
+    val replacementModeDescription: String,
+    val replacementDialogTitle: String,
+    val replacementNewRfidLabel: String,
+    val replacementOldRfidLabel: String,
+    val replacementOldRfidHint: String,
+    val replacementReasonLabel: String,
+    val replacementReasonDamaged: String,
+    val replacementReasonUnreadable: String,
+    val replacementSuccessToast: String,
+    val submit: String,
+    val cancel: String,
     val powerTitle: String,
     val powerLevelPrefix: String,
     val soundTitle: String,
@@ -144,6 +157,11 @@ data class AppStrings(
         SortOption.EPC_ASC -> sortEpcAsc
         SortOption.READ_COUNT_DESC -> sortReadCount
         SortOption.QUALITY_DESC -> sortQuality
+    }
+
+    fun reasonLabel(reason: ReplacementReason): String = when (reason) {
+        ReplacementReason.DAMAGED -> replacementReasonDamaged
+        ReplacementReason.UNREADABLE -> replacementReasonUnreadable
     }
 
     fun qualityText(quality: TagQuality): String = when (quality) {
@@ -244,6 +262,18 @@ val EnglishStrings = AppStrings(
     initialYearLabel = "Initial Year",
     factoryCodeLabel = "Factory Code",
     opnameLabel = "Scan result is sent to current stock",
+    replacementModeLabel = "RFID Replacement",
+    replacementModeDescription = "Stop after the first tag detected and prompt to replace it, instead of scanning a batch",
+    replacementDialogTitle = "Replace RFID Tag",
+    replacementNewRfidLabel = "New RFID (scanned)",
+    replacementOldRfidLabel = "Old RFID",
+    replacementOldRfidHint = "Type the old tag's ID — it's assumed damaged/unreadable",
+    replacementReasonLabel = "Reason",
+    replacementReasonDamaged = "Damaged",
+    replacementReasonUnreadable = "Unreadable",
+    replacementSuccessToast = "Tag replaced successfully",
+    submit = "Submit",
+    cancel = "Cancel",
     powerTitle = "Power",
     powerLevelPrefix = "Level ",
     soundTitle = "Sound",
@@ -354,6 +384,18 @@ val IndonesianStrings = AppStrings(
     initialYearLabel = "Initial Year",
     factoryCodeLabel = "Factory Code",
     opnameLabel = "Hasil scan langsung dikirim ke stok saat ini",
+    replacementModeLabel = "Penggantian RFID",
+    replacementModeDescription = "Berhenti setelah tag pertama terdeteksi dan tampilkan form penggantian, bukan scan sekaligus banyak",
+    replacementDialogTitle = "Ganti Tag RFID",
+    replacementNewRfidLabel = "RFID Baru (hasil scan)",
+    replacementOldRfidLabel = "RFID Lama",
+    replacementOldRfidHint = "Ketik ID tag lama — dianggap rusak/tidak terbaca",
+    replacementReasonLabel = "Alasan",
+    replacementReasonDamaged = "Rusak",
+    replacementReasonUnreadable = "Tidak Terbaca",
+    replacementSuccessToast = "Tag berhasil diganti",
+    submit = "Kirim",
+    cancel = "Batal",
     powerTitle = "Power",
     powerLevelPrefix = "Level ",
     soundTitle = "Suara",

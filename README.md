@@ -16,6 +16,7 @@ This document is both a user guide (what every screen and setting does) and a de
 - [Signal Quality](#signal-quality)
 - [Barcode mode](#barcode-mode)
 - [Sending scans: WO vs Register mode](#sending-scans-wo-vs-register-mode)
+- [RFID Replacement](#rfid-replacement)
 - [Background scanning & the floating bubble](#background-scanning--the-floating-bubble)
 - [Local CSV backup](#local-csv-backup)
 - [Self-update](#self-update)
@@ -152,6 +153,61 @@ also post straight to current stock.
 
 ![Mode toggle with the "opname" checkbox](docs/screenshots/settings-scan-mode-and-mode.png)
 
+## RFID Replacement
+
+For swapping a damaged/unreadable tag's server record onto a new physical tag. **Register mode
+only** — a checkbox, *"RFID Replacement"*, appears below the opname checkbox once Register is
+selected. Off by default.
+
+![Register mode with the RFID Replacement checkbox](docs/screenshots/settings-replacement-checkbox.png)
+
+Checking it also forces the **opname** checkbox on and locks it (grayed out, un-tappable) — a
+replacement is always an opname-style stock update, so the two can never disagree. Opname unlocks
+again the moment Replacement is turned back off, keeping whatever value it had. This is enforced
+in two places, not just the checkbox's `enabled` state: `ScanViewModel.saveConfig()` forces
+`opname = true` whenever `replacementModeEnabled` is true regardless of what's passed in, and
+`ConfigRepository.load()` does the same OR on every load — so a config saved before this rule
+existed self-heals the next time Settings opens, not just on the next Save.
+
+With it on, scanning behaves completely differently from the normal batch flow: the instant a
+**single** tag is detected, scanning stops immediately and a modal appears — no batch, no
+Sending/Sent banner, nothing posted to the usual endpoint.
+
+<table>
+<tr>
+<td><img src="docs/screenshots/replacement-dialog-empty.png" alt="Replacement dialog, empty" /><br/><sub>New RFID is read-only (whatever was just scanned)</sub></td>
+<td><img src="docs/screenshots/replacement-dialog-reason.png" alt="Replacement dialog, reason dropdown open" /><br/><sub>Reason: exactly two hardcoded options</sub></td>
+</tr>
+</table>
+
+- **New RFID** — read-only, the tag that was just scanned
+- **Old RFID** — typed manually (the assumption is that tag is damaged/unreadable, so it can't be
+  scanned)
+- **Reason** — a dropdown with exactly two hardcoded options, Damaged or Unreadable
+- **Submit** — disabled until Old RFID is non-blank; on failure the dialog stays open with an
+  inline message (same red/blue formatting as [Send errors](#send-errors--log-history)) so the
+  operator can fix and retry without re-scanning; on success the dialog closes and the tag list
+  clears, ready for the next replacement
+- **Cancel** — discards the scanned tag and closes the dialog without submitting anything
+
+Posts to a **different endpoint** than every other send in this app:
+
+`POST {baseUrl}/api/v1/master/register-rfids/replace`
+```json
+{
+  "old_rfid_number": "E2806894000050367572D095",
+  "new_rfid_number": "RFID_NEW_703",
+  "replacement_remark": "Damaged",
+  "factory_id": 382
+}
+```
+
+`factory_id` is the numeric id behind whichever Factory Code is selected in Settings (see
+[Settings reference](#settings-reference)) — not the `factory_code` string the regular scan
+payload uses; both come from the same fetched entry, just different fields for different
+endpoints. Every attempt (success or failure) is also written to
+[Log History](#send-errors--log-history) like any other send.
+
 ## Background scanning & the floating bubble
 
 Off by default. Turn it on in Settings → Background Scanning, and two things change:
@@ -216,7 +272,9 @@ Every section, top to bottom, each with its own icon:
 
 - **Scan Mode** — RFID / Barcode toggle described in [Barcode mode](#barcode-mode) above; the
   selected option's icon turns purple when Barcode is active
-- **Mode** — WO / Register toggle, plus the "opname" checkbox described earlier (available in both)
+- **Mode** — WO / Register toggle, plus the "opname" checkbox described earlier (available in
+  both) and, in Register only, the "RFID Replacement" checkbox — see
+  [RFID Replacement](#rfid-replacement)
 
 ![Scan Mode and Mode sections](docs/screenshots/settings-scan-mode-and-mode.png)
 
@@ -318,7 +376,8 @@ app/src/main/java/com/stechoq/wms/
 │   ├── InputMode.kt             # RFID | Barcode, persisted per device
 │   ├── TagQuality.kt            # Strong/Medium/Weak classification from RSSI + read count
 │   ├── BarcodeScanRecord.kt     # One decoded barcode + its send status
-│   ├── FactoryCodeOption.kt     # Fetched Factory Code entry: code (sent) + name (display only)
+│   ├── FactoryCodeOption.kt     # Fetched Factory Code entry: id, code, and display name
+│   ├── ReplacementReason.kt     # Damaged | Unreadable, hardcoded per the WMS team
 │   ├── SendLogEntry.kt          # One send attempt's full raw detail, for Settings' Log History
 │   └── TagRecord.kt
 ├── rfid/
@@ -381,7 +440,7 @@ always overrides both via `-PappVersionCode=`/`-PappVersionName=` — see below.
 every push to `main` — no manual build or upload step, ever. Each run:
 
 1. Computes a version from the run number (`versionCode = <run number> + 1000`, `versionName =
-   1.4.<run number>`) — always increasing, which Android requires for an update to install over
+   1.5.<run number>`) — always increasing, which Android requires for an update to install over
    the previous version, without ever hand-editing `build.gradle`. The `+1000` offset keeps CI's
    versionCode safely clear of anything used during local/manual testing.
 2. Builds and unit-tests the release APK with that version baked in.

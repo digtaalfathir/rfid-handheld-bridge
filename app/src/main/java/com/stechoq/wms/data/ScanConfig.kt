@@ -22,10 +22,19 @@ data class ScanConfig(
     val makerName: String = "",
     val initialYear: String = Calendar.getInstance().get(Calendar.YEAR).toString(),
     val factoryCode: String = "",
+    // The numeric id behind factoryCode (from the same fetched Factory Code list — see
+    // FactoryCodeOption) — factoryCode is what the regular scan payload sends, factoryId is what
+    // the RFID-replacement endpoint wants instead. Kept alongside rather than looked up at
+    // submit-time so a stale/cleared fetch list can't silently break replacement after the fact.
+    val factoryId: Int = 0,
     // Register-only: whether this scan result also posts straight to current stock. Hidden in
     // the UI outside Register mode, but still carried in every payload alongside "mode" so the
     // backend can tell WO and Register submissions apart from the one shared endpoint.
     val opname: Boolean = false,
+    // Register-only: when on, detecting a single tag mid-scan stops immediately and prompts to
+    // replace it (a damaged/unreadable tag's old EPC swapped for a new physical tag) instead of
+    // continuing to inventory and posting a batch. Hidden in the UI outside Register mode.
+    val replacementModeEnabled: Boolean = false,
     val power: Int = 20,
     val soundEnabled: Boolean = true,
     val soundVolume: Int = 80,

@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -40,9 +42,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -62,6 +66,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.stechoq.wms.ReplacementPrompt
 import com.stechoq.wms.ScanUiState
 import com.stechoq.wms.ScanViewModel
 import com.stechoq.wms.SendStatus
@@ -70,6 +75,7 @@ import com.stechoq.wms.UpdateStatus
 import com.stechoq.wms.data.BarcodeScanRecord
 import com.stechoq.wms.data.BarcodeSendStatus
 import com.stechoq.wms.data.InputMode
+import com.stechoq.wms.data.ReplacementReason
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
 import com.stechoq.wms.network.formatSendError
@@ -176,6 +182,18 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 }
             }
         }
+    }
+
+    state.replacementPrompt?.let { prompt ->
+        ReplacementDialog(
+            prompt = prompt,
+            onSubmit = { oldRfid, reason ->
+                viewModel.submitReplacement(oldRfid, reason) { success ->
+                    if (success) Toast.makeText(context, strings.replacementSuccessToast, Toast.LENGTH_SHORT).show()
+                }
+            },
+            onCancel = { viewModel.cancelReplacement() }
+        )
     }
 }
 
@@ -445,6 +463,96 @@ private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
         }
         SendStatus.Idle -> {}
     }
+}
+
+/** Register + Replacement mode's mid-scan modal — appears the instant one tag is detected.
+ * [prompt.newRfid] is read-only (it's literally what was just scanned); the old tag's id is typed
+ * manually since that tag is assumed damaged/unreadable, which is the whole reason for replacing
+ * it in the first place. */
+@Composable
+private fun ReplacementDialog(
+    prompt: ReplacementPrompt,
+    onSubmit: (oldRfid: String, reason: ReplacementReason) -> Unit,
+    onCancel: () -> Unit
+) {
+    val strings = LocalStrings.current
+    var oldRfid by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf(ReplacementReason.DAMAGED) }
+    var reasonMenuExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!prompt.submitting) onCancel() },
+        title = { Text(strings.replacementDialogTitle, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                Text(strings.replacementNewRfidLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(prompt.newRfid, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = oldRfid,
+                    onValueChange = { oldRfid = it },
+                    label = { Text(strings.replacementOldRfidLabel) },
+                    supportingText = { Text(strings.replacementOldRfidHint) },
+                    singleLine = true,
+                    enabled = !prompt.submitting,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                Box {
+                    OutlinedTextField(
+                        value = strings.reasonLabel(reason),
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = !prompt.submitting,
+                        label = { Text(strings.replacementReasonLabel) },
+                        trailingIcon = {
+                            IconButton(onClick = { reasonMenuExpanded = !reasonMenuExpanded }, enabled = !prompt.submitting) {
+                                Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    DropdownMenu(expanded = reasonMenuExpanded, onDismissRequest = { reasonMenuExpanded = false }) {
+                        ReplacementReason.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(strings.reasonLabel(option)) },
+                                onClick = { reason = option; reasonMenuExpanded = false }
+                            )
+                        }
+                    }
+                }
+
+                if (prompt.error != null) {
+                    Spacer(Modifier.height(12.dp))
+                    val display = formatSendError(prompt.error, strings.systemErrorGeneric)
+                    Text(
+                        display.message,
+                        color = if (display.isSystemError) ErrorRed else BluePrimary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit(oldRfid, reason) },
+                enabled = !prompt.submitting && oldRfid.isNotBlank()
+            ) {
+                if (prompt.submitting) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(strings.submit)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel, enabled = !prompt.submitting) { Text(strings.cancel) }
+        }
+    )
 }
 
 @Composable

@@ -176,9 +176,43 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Checkbox(checked = draft.opname, onCheckedChange = { draft = draft.copy(opname = it) })
+                    Checkbox(
+                        checked = draft.opname,
+                        // Replacement always posts as an opname-style update — forced on and
+                        // locked while Replacement is active so the two can't silently disagree;
+                        // unlocked again the moment Replacement is turned back off.
+                        enabled = !draft.replacementModeEnabled,
+                        onCheckedChange = { draft = draft.copy(opname = it) }
+                    )
                     Spacer(Modifier.width(4.dp))
                     Text(strings.opnameLabel, style = MaterialTheme.typography.bodyMedium)
+                }
+                // Replacement is a Register-specific workflow (swapping a damaged tag's server
+                // record for a new physical tag) — hidden in WO the same way opname used to be.
+                if (draft.mode == ScanMode.REGISTER) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = draft.replacementModeEnabled,
+                            onCheckedChange = { checked ->
+                                draft = draft.copy(
+                                    replacementModeEnabled = checked,
+                                    opname = if (checked) true else draft.opname
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(strings.replacementModeLabel, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(
+                        strings.replacementModeDescription,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 32.dp, end = 8.dp)
+                    )
                 }
             }
 
@@ -249,8 +283,12 @@ fun SettingsScreen(
                     draft.factoryCode,
                     factoryCodeOptions.map { it.code to "${it.code} - ${it.name}" },
                     null
-                ) {
-                    draft = draft.copy(factoryCode = it)
+                ) { selectedCode ->
+                    // factoryId rides along with factoryCode — the RFID-replacement endpoint
+                    // wants the numeric id, the regular scan payload wants the code string, both
+                    // from this same fetched entry.
+                    val matched = factoryCodeOptions.find { it.code == selectedCode }
+                    draft = draft.copy(factoryCode = selectedCode, factoryId = matched?.id ?: draft.factoryId)
                 }
             }
 

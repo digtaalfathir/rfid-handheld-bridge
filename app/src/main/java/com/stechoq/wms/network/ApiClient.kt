@@ -52,6 +52,31 @@ class ApiClient {
         }
     }
 
+    private val REPLACE_RFID_PATH = "/api/v1/master/register-rfids/replace"
+
+    /** Registers a physical tag swap — [oldRfid] (typed manually, since that tag is assumed
+     * damaged/unreadable) gets replaced server-side by [newRfid] (whatever was just scanned).
+     * Same null-on-success/raw-detail-on-failure shape as [sendCodes], so it flows through the
+     * same on-screen formatting and Settings log history. */
+    fun replaceRfid(config: ScanConfig, oldRfid: String, newRfid: String, remark: String): String? {
+        return try {
+            val payload = JSONObject().apply {
+                put("old_rfid_number", oldRfid)
+                put("new_rfid_number", newRfid)
+                put("replacement_remark", remark)
+                put("factory_id", config.factoryId)
+            }
+            val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val url = config.baseUrl.trimEnd('/') + REPLACE_RFID_PATH
+            val request = Request.Builder().url(url).post(body).build()
+            client.newCall(request).execute().use { resp ->
+                if (resp.isSuccessful) null else "HTTP ${resp.code} ${resp.body?.string().orEmpty()}"
+            }
+        } catch (e: Exception) {
+            e.message ?: e.javaClass.simpleName
+        }
+    }
+
     /** Returns null when the host responds at all (any status code), a reason otherwise. */
     fun testConnection(apiUrl: String): String? {
         return try {
@@ -100,7 +125,9 @@ class ApiClient {
                     for (i in 0 until data.length()) {
                         val item = data.getJSONObject(i)
                         val code = item.optString("code")
-                        if (code.isNotBlank()) results.add(FactoryCodeOption(code, item.optString("name")))
+                        if (code.isNotBlank()) {
+                            results.add(FactoryCodeOption(item.optInt("id"), code, item.optString("name")))
+                        }
                     }
                 }
                 page++
