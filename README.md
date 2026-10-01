@@ -345,8 +345,17 @@ string table, so nothing drifts out of sync between languages.
   disables the scanner (`Status:DISABLED;ProfileName:null`). If it ever recurs on a specific unit
   despite that, it'd point to a genuine DataWedge profile issue on that handheld.
 - **Update won't install on a device you tested with a local/manual build** — Android refuses to
-  install an "update" with an equal-or-lower `versionCode` than what's already there. This only
-  matters if you've been sideloading manual builds outside the normal CI pipeline.
+  install an "update" with an equal-or-lower `versionCode` than what's already there, and this has
+  been a recurring real incident, not just a theoretical one: sideloading a local build to verify
+  something live on a real handheld, then forgetting to reinstall the actual CI release afterward,
+  leaves that handheld's versionCode higher than every subsequent real release — silently blocking
+  self-update from that point on, no matter how many releases follow, until it's fixed by hand.
+  Fix: download the [latest release](../../releases/latest)'s APK and `adb install -r -d <apk>`
+  (`-d` allows the versionCode downgrade; only works if the currently-installed build is
+  debuggable, which a local test build always is) — this doesn't lose the device's saved Settings
+  the way a full uninstall/reinstall would. CI's versionCode offset (`+1000000` — see
+  [Releasing](#releasing-fully-automated)) is deliberately large so this needs a very sizable local
+  test versionCode to trigger again.
 - **Update download times out** — the in-app updater downloads the APK itself (a few MB) over
   whatever network the handheld has; on slow warehouse WiFi the first attempt can occasionally
   time out. Tapping Update Now again retries cleanly.
@@ -439,10 +448,11 @@ always overrides both via `-PappVersionCode=`/`-PappVersionName=` — see below.
 `.github/workflows/release.yml` builds, tests, signs, tags, and publishes a GitHub Release on
 every push to `main` — no manual build or upload step, ever. Each run:
 
-1. Computes a version from the run number (`versionCode = <run number> + 1000`, `versionName =
+1. Computes a version from the run number (`versionCode = <run number> + 1000000`, `versionName =
    1.5.<run number>`) — always increasing, which Android requires for an update to install over
-   the previous version, without ever hand-editing `build.gradle`. The `+1000` offset keeps CI's
-   versionCode safely clear of anything used during local/manual testing.
+   the previous version, without ever hand-editing `build.gradle`. The large offset keeps CI's
+   versionCode far above anything a local/manual test build could plausibly reach, so a stray test
+   install left on a device (see [Troubleshooting](#troubleshooting)) can't outrun CI's own numbers.
 2. Builds and unit-tests the release APK with that version baked in.
 3. Signs it with the same keystore every already-deployed handheld was signed with — using a
    different key would make every existing install reject the update.

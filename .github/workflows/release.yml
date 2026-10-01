@@ -49,14 +49,19 @@ jobs:
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
 
       # Base offset keeps versionCode safely clear of anything used during local/manual testing.
-      # Bumped from +100 to +1000 after a real collision: local test builds during development
-      # reached versionCode 110, which was already higher than an early CI run's 100+run_number,
-      # so that CI release silently failed to install as an "update" on the test device. +1000
-      # gives much more headroom against this ever recurring during ordinary local testing.
+      # Bumped +100 -> +1000 once already after a real collision (local builds reached 110,
+      # already above that run's 100+run_number) — and it happened again anyway: iterating on a
+      # feature against a real handheld means repeatedly sideloading local test builds numbered
+      # well above +1000 (2000s so far) so they don't collide with each other, and forgetting to
+      # reinstall the real release afterward leaves that high number stuck on the device. Every
+      # CI release after that point is then "older" than what's already installed and silently
+      # fails to self-update, no matter how many releases follow. +1000000 puts CI's number far
+      # out of reach of any plausible local test versionCode instead of relying on remembering to
+      # clean up every time.
       - name: Compute version
         id: version
         run: |
-          echo "code=$(( ${{ github.run_number }} + 1000 ))" >> "$GITHUB_OUTPUT"
+          echo "code=$(( ${{ github.run_number }} + 1000000 ))" >> "$GITHUB_OUTPUT"
           echo "name=1.5.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
