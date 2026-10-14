@@ -80,11 +80,11 @@ data class AppStrings(
     val endpointLabel: String,
     val readerIdLabel: String,
     val antennaLabel: String,
-    val testConnection: String,
-    val testing: String,
-    val serverReachable: String,
-    val testFailedPrefix: String,
+    val dropdownFetchLoading: String,
+    val dropdownFetchConnectedPrefix: String,
     val dropdownFetchFailed: String,
+    val dropdownFetchStaleHint: String,
+    val tryAgain: String,
     val registerConfigTitle: String,
     val rrTypeLabel: String,
     val makerNameLabel: String,
@@ -141,6 +141,9 @@ data class AppStrings(
     val errorPowerRange: String
 ) {
     fun sentSuccess(count: Int): String = "$sentPrefix ($count $tagWord)"
+
+    fun dropdownFetchConnected(rrTypeCount: Int, factoryCount: Int): String =
+        "$dropdownFetchConnectedPrefix · $rrTypeCount RR Type, $factoryCount Factory"
 
     fun deviceLabel(type: DeviceType): String = when (type) {
         DeviceType.CHAINWAY -> deviceChainwayLabel
@@ -251,11 +254,11 @@ val EnglishStrings = AppStrings(
     endpointLabel = "Endpoint",
     readerIdLabel = "Reader ID",
     antennaLabel = "Antenna",
-    testConnection = "Test & Get Data",
-    testing = "Testing...",
-    serverReachable = "Server is reachable",
-    testFailedPrefix = "Failed: ",
-    dropdownFetchFailed = "Could not load RR Type / Factory Code from the server",
+    dropdownFetchLoading = "Fetching data…",
+    dropdownFetchConnectedPrefix = "Connected",
+    dropdownFetchFailed = "Failed to fetch data from the server",
+    dropdownFetchStaleHint = "RR Type / Factory Code lists may be from the previous server",
+    tryAgain = "Try again",
     registerConfigTitle = "Register Configuration",
     rrTypeLabel = "RR Type",
     makerNameLabel = "Maker Name",
@@ -373,11 +376,11 @@ val IndonesianStrings = AppStrings(
     endpointLabel = "Endpoint",
     readerIdLabel = "Reader ID",
     antennaLabel = "Antenna",
-    testConnection = "Tes & Ambil Data",
-    testing = "Menguji...",
-    serverReachable = "Server dapat dijangkau",
-    testFailedPrefix = "Gagal: ",
-    dropdownFetchFailed = "Gagal memuat RR Type / Factory Code dari server",
+    dropdownFetchLoading = "Mengambil data…",
+    dropdownFetchConnectedPrefix = "Terhubung",
+    dropdownFetchFailed = "Gagal mengambil data dari server",
+    dropdownFetchStaleHint = "Daftar RR Type / Factory Code mungkin dari server sebelumnya",
+    tryAgain = "Coba lagi",
     registerConfigTitle = "Register Configuration",
     rrTypeLabel = "RR Type",
     makerNameLabel = "Maker Name",
