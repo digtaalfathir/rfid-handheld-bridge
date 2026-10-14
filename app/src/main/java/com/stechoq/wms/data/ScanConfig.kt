@@ -56,7 +56,13 @@ data class ScanConfig(
         val ENDPOINT_OPTIONS = listOf(
             "/api/v1/warehouse-management/jmp/log-rfids/components/handheld"
         )
-        val INITIAL_YEAR_OPTIONS = (2000..2026).map { it.toString() }
+        const val FIRST_INITIAL_YEAR = 2000
+
+        /** [FIRST_INITIAL_YEAR] up to [currentYear] (the device clock's year by default) — computed
+         * rather than a fixed range, so the dropdown keeps including the current year, which is
+         * also what [initialYear] defaults to. */
+        fun initialYearOptions(currentYear: Int = Calendar.getInstance().get(Calendar.YEAR)): List<String> =
+            (FIRST_INITIAL_YEAR..currentYear).map { it.toString() }
 
         /** Whether [url] is complete enough to be worth fetching from — a scheme alone ("http://",
          * mid-typing) would otherwise fire a request at an empty host. */
