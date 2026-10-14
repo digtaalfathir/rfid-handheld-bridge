@@ -101,6 +101,7 @@ data class AppStrings(
     val replacementReasonDamaged: String,
     val replacementReasonUnreadable: String,
     val replacementSuccessToast: String,
+    val replacementFactoryMissing: String,
     val submit: String,
     val cancel: String,
     val powerTitle: String,
@@ -138,6 +139,8 @@ data class AppStrings(
     val errorRrTypeRequired: String,
     val errorMakerNameRequired: String,
     val errorInitialYearNumber: String,
+    val errorFactoryCodeRequired: String,
+    val errorFactoryIdMissing: String,
     val errorPowerRange: String
 ) {
     fun sentSuccess(count: Int): String = "$sentPrefix ($count $tagWord)"
@@ -185,6 +188,8 @@ data class AppStrings(
         ValidationErrorType.RR_TYPE_REQUIRED -> errorRrTypeRequired
         ValidationErrorType.MAKER_NAME_REQUIRED -> errorMakerNameRequired
         ValidationErrorType.INITIAL_YEAR_NUMBER -> errorInitialYearNumber
+        ValidationErrorType.FACTORY_CODE_REQUIRED -> errorFactoryCodeRequired
+        ValidationErrorType.FACTORY_ID_MISSING -> errorFactoryIdMissing
         ValidationErrorType.POWER_RANGE -> errorPowerRange
     }
 }
@@ -275,6 +280,7 @@ val EnglishStrings = AppStrings(
     replacementReasonDamaged = "Damaged",
     replacementReasonUnreadable = "Unreadable",
     replacementSuccessToast = "Tag replaced successfully",
+    replacementFactoryMissing = "Factory Code is not selected. Open Settings, check the Base URL, and pick a Factory Code.",
     submit = "Submit",
     cancel = "Cancel",
     powerTitle = "Power",
@@ -310,6 +316,8 @@ val EnglishStrings = AppStrings(
     errorRrTypeRequired = "RR Type is required",
     errorMakerNameRequired = "Maker Name is required",
     errorInitialYearNumber = "Initial Year must be a number",
+    errorFactoryCodeRequired = "Factory Code is not selected, check the Base URL",
+    errorFactoryIdMissing = "Re-select the Factory Code (its ID is missing)",
     errorPowerRange = "Power must be between $POWER_RANGE_TEXT"
 )
 
@@ -397,6 +405,7 @@ val IndonesianStrings = AppStrings(
     replacementReasonDamaged = "Rusak",
     replacementReasonUnreadable = "Tidak Terbaca",
     replacementSuccessToast = "Tag berhasil diganti",
+    replacementFactoryMissing = "Factory Code belum dipilih. Buka Settings, periksa Base URL, lalu pilih Factory Code.",
     submit = "Kirim",
     cancel = "Batal",
     powerTitle = "Power",
@@ -432,6 +441,8 @@ val IndonesianStrings = AppStrings(
     errorRrTypeRequired = "RR Type wajib diisi",
     errorMakerNameRequired = "Maker Name wajib diisi",
     errorInitialYearNumber = "Initial Year harus berupa angka",
+    errorFactoryCodeRequired = "Factory Code belum dipilih, periksa Base URL",
+    errorFactoryIdMissing = "Pilih ulang Factory Code (ID-nya belum tersimpan)",
     errorPowerRange = "Power harus antara $POWER_RANGE_TEXT"
 )
 

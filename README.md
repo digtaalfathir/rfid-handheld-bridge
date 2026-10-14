@@ -184,7 +184,8 @@ Sending/Sent banner, nothing posted to the usual endpoint.
 - **Old RFID** — typed manually (the assumption is that tag is damaged/unreadable, so it can't be
   scanned)
 - **Reason** — a dropdown with exactly two hardcoded options, Damaged or Unreadable
-- **Submit** — disabled until Old RFID is non-blank; on failure the dialog stays open with an
+- **Submit** — disabled until Old RFID is non-blank, and also while no Factory Code (with its
+  numeric id) is saved in Settings — the dialog says so instead of sending `factory_id: 0`; on failure the dialog stays open with an
   inline message (same red/blue formatting as [Send errors](#send-errors--log-history)) so the
   operator can fix and retry without re-scanning; on success the dialog closes and the tag list
   clears, ready for the next replacement
@@ -303,6 +304,8 @@ Every section, top to bottom, each with its own icon:
   Reset). On a failed fetch the old cache is kept and the status line notes it may be from the
   previous server. After a successful fetch, a selected RR Type or Factory Code that the new
   server doesn't have is cleared, so a code from the old server is never sent to the new one.
+  Factory Code is required — **Save** is refused while it's empty, and with RFID Replacement
+  active (Register mode) also while the selected code has no numeric id.
 
 ![Register Configuration](docs/screenshots/settings-test-connection-register.png)
 
