@@ -91,6 +91,21 @@ sealed class UpdateStatus {
     data class Error(val message: String) : UpdateStatus()
 }
 
+/** Status of the RR Type / Factory Code fetch shown under Settings' Base URL field. Each state
+ * carries the Base URL it belongs to. */
+sealed class DropdownFetchState {
+    object Idle : DropdownFetchState()
+    data class Loading(val baseUrl: String) : DropdownFetchState()
+    data class Success(
+        val baseUrl: String,
+        val rrTypes: List<String>,
+        val factoryCodes: List<FactoryCodeOption>
+    ) : DropdownFetchState()
+    // hasStaleCache: the dropdowns still hold an earlier successful fetch, possibly from a
+    // different server — worth flagging, since nothing on screen otherwise says where it came from.
+    data class Failed(val baseUrl: String, val hasStaleCache: Boolean) : DropdownFetchState()
+}
+
 data class ScanUiState(
     val readerConnected: Boolean = false,
     val scanning: Boolean = false,
@@ -136,6 +151,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _config = MutableStateFlow(configRepo.load())
     val config: StateFlow<ScanConfig> = _config.asStateFlow()
+
+    private val _dropdownFetch = MutableStateFlow<DropdownFetchState>(DropdownFetchState.Idle)
+    val dropdownFetch: StateFlow<DropdownFetchState> = _dropdownFetch.asStateFlow()
+    private var dropdownFetchJob: Job? = null
 
     private val _uiState = MutableStateFlow(ScanUiState())
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
@@ -440,7 +459,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Submits the replacement; [onResult] lets the caller show a one-shot success toast (same
-     * callback shape as testConnection/fetchDropdownData below) — failure is instead reflected
+     * callback shape the Settings screen's old connection test used) — failure is instead reflected
      * inline via the prompt's own [ReplacementPrompt.error], so the modal stays open with the
      * fields intact for a retry rather than needing the tag re-scanned. */
     fun submitReplacement(oldRfid: String, reason: ReplacementReason, onResult: (Boolean) -> Unit) {
@@ -597,29 +616,41 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
      * whatever generalized message the Scan screen showed at the time. */
     fun sendLog(): List<SendLogEntry> = configRepo.sendLog()
 
-    /** Fetches RR Type and Factory Code lists from [baseUrl] and caches whichever succeed.
-     * [onResult] reports true only if both fetches succeeded. */
-    fun fetchDropdownData(baseUrl: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val rrTypes = api.fetchRrTypes(baseUrl)
-            val factoryCodes = api.fetchFactoryCodes(baseUrl)
-            rrTypes?.let(configRepo::saveRrTypeOptions)
-            factoryCodes?.let(configRepo::saveFactoryCodeOptions)
-            withContext(Dispatchers.Main) { onResult(rrTypes != null && factoryCodes != null) }
+    /** Fetches RR Type and Factory Code lists from [baseUrl], cancelling any fetch still in flight
+     * so a slow response from a previous Base URL can never land on top of this one. The cache is
+     * only overwritten when both lists succeed — a half-success would leave the two dropdowns
+     * holding data from different servers. On failure the old cache is kept as-is. */
+    fun fetchDropdownData(baseUrl: String) {
+        dropdownFetchJob?.cancel()
+        _dropdownFetch.value = DropdownFetchState.Loading(baseUrl)
+        dropdownFetchJob = viewModelScope.launch {
+            // Launched on Main, so cancel() (also called from Main) either lands before
+            // withContext resumes — which then throws instead of returning — or after this whole
+            // block already finished; a stale result can't slip in between.
+            val (rrTypes, factoryCodes) = withContext(Dispatchers.IO) {
+                api.fetchRrTypes(baseUrl) to api.fetchFactoryCodes(baseUrl)
+            }
+            _dropdownFetch.value = if (rrTypes != null && factoryCodes != null) {
+                configRepo.saveRrTypeOptions(rrTypes)
+                configRepo.saveFactoryCodeOptions(factoryCodes)
+                DropdownFetchState.Success(baseUrl, rrTypes, factoryCodes)
+            } else {
+                val hasCache = configRepo.rrTypeOptions().isNotEmpty() || configRepo.factoryCodeOptions().isNotEmpty()
+                DropdownFetchState.Failed(baseUrl, hasStaleCache = hasCache)
+            }
         }
+    }
+
+    fun cancelDropdownFetch() {
+        dropdownFetchJob?.cancel()
+        dropdownFetchJob = null
+        _dropdownFetch.value = DropdownFetchState.Idle
     }
 
     fun resetConfig(): ScanConfig {
         val defaults = configRepo.reset()
         _config.value = defaults
         return defaults
-    }
-
-    fun testConnection(apiUrl: String, onResult: (String?) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val error = api.testConnection(apiUrl)
-            withContext(Dispatchers.Main) { onResult(error) }
-        }
     }
 
     override fun onCleared() {
