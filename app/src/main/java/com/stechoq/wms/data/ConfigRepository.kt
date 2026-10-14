@@ -132,7 +132,9 @@ class ConfigRepository(context: Context) {
 
     fun reset(): ScanConfig {
         prefs.edit().clear().apply()
-        return defaults.copy(power = defaultPower)
+        // readerId is device-derived, never a setting — without it here the reset config would
+        // carry ScanConfig's placeholder default and send that as reader_id until the next load().
+        return defaults.copy(power = defaultPower, readerId = deviceReaderId)
     }
 
     fun antennaOptions(): List<String> =
