@@ -310,7 +310,7 @@ fun SettingsScreen(
                     strings.factoryCodeLabel,
                     draft.factoryCode,
                     factoryCodeOptions.map { it.code to "${it.code} - ${it.name}" },
-                    null
+                    errors["factoryCode"]?.let(strings::validationMessage)
                 ) { selectedCode ->
                     // factoryId rides along with factoryCode — the RFID-replacement endpoint
                     // wants the numeric id, the regular scan payload wants the code string, both

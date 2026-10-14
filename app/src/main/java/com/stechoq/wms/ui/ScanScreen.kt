@@ -187,6 +187,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
     state.replacementPrompt?.let { prompt ->
         ReplacementDialog(
             prompt = prompt,
+            factoryMissing = config.factoryId <= 0,
             onSubmit = { oldRfid, reason ->
                 viewModel.submitReplacement(oldRfid, reason) { success ->
                     if (success) Toast.makeText(context, strings.replacementSuccessToast, Toast.LENGTH_SHORT).show()
@@ -472,6 +473,9 @@ private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
 @Composable
 private fun ReplacementDialog(
     prompt: ReplacementPrompt,
+    // No usable factory_id in the saved config (Settings never picked a Factory Code, or picked it
+    // before the id was stored) — Submit stays disabled, since the server needs that id.
+    factoryMissing: Boolean,
     onSubmit: (oldRfid: String, reason: ReplacementReason) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -526,7 +530,10 @@ private fun ReplacementDialog(
                     }
                 }
 
-                if (prompt.error != null) {
+                if (factoryMissing) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(strings.replacementFactoryMissing, color = ErrorRed, style = MaterialTheme.typography.bodySmall)
+                } else if (prompt.error != null) {
                     Spacer(Modifier.height(12.dp))
                     val display = formatSendError(prompt.error, strings.systemErrorGeneric)
                     Text(
@@ -540,7 +547,7 @@ private fun ReplacementDialog(
         confirmButton = {
             Button(
                 onClick = { onSubmit(oldRfid, reason) },
-                enabled = !prompt.submitting && oldRfid.isNotBlank()
+                enabled = !prompt.submitting && !factoryMissing && oldRfid.isNotBlank()
             ) {
                 if (prompt.submitting) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)

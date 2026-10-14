@@ -464,6 +464,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
      * fields intact for a retry rather than needing the tag re-scanned. */
     fun submitReplacement(oldRfid: String, reason: ReplacementReason, onResult: (Boolean) -> Unit) {
         val prompt = _uiState.value.replacementPrompt ?: return
+        // The dialog already disables Submit in this case; this is the backstop, so factory_id = 0
+        // can never reach the server even from a config saved before Factory Code was validated.
+        if (_config.value.factoryId <= 0) return
         _uiState.update { it.copy(replacementPrompt = prompt.copy(submitting = true, error = null)) }
         viewModelScope.launch(Dispatchers.IO) {
             val error = api.replaceRfid(_config.value, oldRfid, prompt.newRfid, reason.wireValue)
