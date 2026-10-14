@@ -88,10 +88,29 @@ turned into one plain-language line instead:
   didn't parse) falls back to showing the raw text, in red.
 
 Generalizing the 500 case intentionally throws away detail on screen — so nothing is lost, every
-send attempt (success or failure, RFID batch or barcode) is also written to a small on-device log:
-**Settings → Log History** shows the last 10 attempts with their full, untouched raw detail
-(HTTP status + response body, or the exception message), so a WMS admin can still see exactly what
-a generalized "System error" actually was.
+send attempt (success or failure — RFID batch, barcode, or RFID replacement) is also written to a
+small on-device log: **Settings → Log History** shows the last 30 attempts, newest first. Each
+entry shows:
+
+- a **type badge** — *RFID · Register · Opname*, *Barcode · WO*, *Replacement*, … — plus
+  Sent/Failed, the time, and how many tags/codes it carried
+- **Details** (tap to expand): the Factory Code and RR Type it was sent with, the full URL (Base
+  URL + Endpoint), the result — the full, untouched raw detail (HTTP status + response body, or
+  the exception message), so a WMS admin can still see exactly what a generalized "System error"
+  actually was — and the exact JSON payload that was sent (cut off on screen past 2,000
+  characters; stored whole)
+- a **Resend** button — posts the **original payload, unchanged, to the same URL** it first went
+  to, not rebuilt from whatever Settings say now. A confirmation is shown first; for an entry that
+  originally **succeeded** it also warns that the data may be recorded twice. The resend is
+  logged as a new entry marked *"Resent from &lt;original time&gt;"*. The payload goes out with two
+  extra fields — see [Resends](#resends) for the backend. Not offered for a replacement that
+  already succeeded (the old tag is already swapped out server-side, so it could only be
+  rejected), nor for entries logged before this version (their payload was never stored)
+
+Only the small per-entry summary is kept in SharedPreferences; each payload is stored as its own
+file in the app's private storage (`files/send_log/`), deleted when its entry drops off the
+30-entry list — a batch can be thousands of tags, and keeping that out of SharedPreferences keeps
+every send's log write cheap. The log survives app restarts and Settings → Reset.
 
 ## Signal Quality
 
@@ -314,7 +333,8 @@ Every section, top to bottom, each with its own icon:
 
 ![Local Backup, Background Scanning, and Language](docs/screenshots/settings-backup-bgscan-lang.png)
 
-- **Log History** — opens the last 10 send attempts with their full raw detail; see
+- **Log History** — opens the last 30 send attempts with their type, config, payload, raw
+  detail, and a Resend button; see
   [Send errors & log history](#send-errors--log-history). Survives "Reset" (it's device-level
   diagnostic data, not a setting)
 - **Reset** — clears everything above back to defaults (never touches device type or language)
@@ -387,7 +407,7 @@ app/src/main/java/com/stechoq/wms/
 │   ├── BarcodeScanRecord.kt     # One decoded barcode + its send status
 │   ├── FactoryCodeOption.kt     # Fetched Factory Code entry: id, code, and display name
 │   ├── ReplacementReason.kt     # Damaged | Unreadable, hardcoded per the WMS team
-│   ├── SendLogEntry.kt          # One send attempt's full raw detail, for Settings' Log History
+│   ├── SendLogEntry.kt          # One send attempt: type, config, raw detail — Settings' Log History
 │   └── TagRecord.kt
 ├── rfid/
 │   ├── RfidReaderManager.kt     # Vendor-agnostic interface both backends implement
@@ -399,6 +419,7 @@ app/src/main/java/com/stechoq/wms/
 │   └── ZebraBarcodeManager.kt   # DataWedge profile + intent-output receiver
 ├── network/
 │   ├── ApiClient.kt             # POSTs scanned tags/barcodes to the configured endpoint
+│   ├── Resend.kt                # Resend markers (is_resend / original_timestamp) for Log History
 │   ├── SendErrorFormatter.kt    # Raw send failure -> plain-language display message + color
 │   └── UpdateClient.kt          # GitHub Releases version check + APK download
 ├── service/
@@ -524,3 +545,26 @@ for a stop-scan to collect several.
 by hand — every handheld in a fleet gets a unique, readable ID with no per-device setup.
 `opname` is available in both WO and Register (a checkbox next to the Mode toggle, meaning "also
 post straight to current stock"), `false` unless checked.
+
+#### Resends
+
+**For the backend:** a send can be posted again from **Settings → Log History → Resend**
+(scan batches, barcodes, and failed RFID replacements). A resend goes to the **same URL** as the
+original and carries the **original payload unchanged** — including its own `timestamp`, which
+stays the time of the original scan — with two extra fields:
+
+```json
+{
+  "...": "every original field, unchanged",
+  "is_resend": true,
+  "original_timestamp": "2026-10-14T02:12:00Z"
+}
+```
+
+- `is_resend` — always `true` on a resend; absent on a first send
+- `original_timestamp` — when the original send happened (UTC, same format as `timestamp`).
+  Resending a resend keeps the first send's value
+
+An operator can resend an entry that **already succeeded** (after a confirmation warning), so the
+same tags can arrive more than once. The backend is expected to deduplicate — `is_resend` +
+`original_timestamp` + `reader_id` identify a repeat. A first send never carries either field.

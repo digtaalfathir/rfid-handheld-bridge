@@ -5,6 +5,10 @@ import android.os.Build
 import android.provider.Settings
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+
+/** How many send attempts Settings' Log History keeps, newest first. */
+const val SEND_LOG_LIMIT = 30
 
 class ConfigRepository(context: Context) {
 
@@ -48,28 +52,57 @@ class ConfigRepository(context: Context) {
 
     // Also device-level: a diagnostic trail, not a setting — "Reset" clearing it away right when
     // someone's trying to figure out what a generalized on-screen error actually meant would
-    // defeat the point of keeping it at all. Newest first, capped at 10 to stay a quick glance
-    // rather than a growing file.
+    // defeat the point of keeping it at all. Newest first, capped at SEND_LOG_LIMIT.
+    //
+    // Only the small per-entry summary lives in SharedPreferences; each request body sits in its
+    // own file under send_log/. A batch can be thousands of tags (tens of KB), and
+    // SharedPreferences re-reads and rewrites its whole file on every change — keeping bodies out
+    // keeps every send's log write cheap.
+    private val sendLogDir = File(appContext.filesDir, "send_log")
+
+    @Synchronized
     fun sendLog(): List<SendLogEntry> {
         val raw = devicePrefs.getString("send_log", null) ?: return emptyList()
         return try {
             val arr = JSONArray(raw)
-            (0 until arr.length()).map {
-                val o = arr.getJSONObject(it)
-                SendLogEntry(o.getLong("timestamp"), o.getBoolean("success"), o.getString("detail"))
+            (0 until arr.length()).mapNotNull {
+                try {
+                    SendLogEntry.fromJson(arr.getJSONObject(it))
+                } catch (e: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    fun appendSendLog(entry: SendLogEntry) {
-        val updated = (listOf(entry) + sendLog()).take(10)
-        val arr = JSONArray()
-        updated.forEach {
-            arr.put(JSONObject().put("timestamp", it.timestamp).put("success", it.success).put("detail", it.detail))
+    /** [payload] is the exact request body that was sent, stored for display and resend. */
+    @Synchronized
+    fun appendSendLog(entry: SendLogEntry, payload: String? = null) {
+        if (payload != null && entry.id != null) {
+            try {
+                sendLogDir.mkdirs()
+                File(sendLogDir, "${entry.id}.json").writeText(payload)
+            } catch (e: Exception) {
+                // best-effort — the entry itself is still logged, just not resendable
+            }
         }
+        val all = listOf(entry) + sendLog()
+        val kept = all.take(SEND_LOG_LIMIT)
+        all.drop(SEND_LOG_LIMIT).forEach { dropped ->
+            dropped.id?.let { File(sendLogDir, "$it.json").delete() }
+        }
+        val arr = JSONArray()
+        kept.forEach { arr.put(it.toJson()) }
         devicePrefs.edit().putString("send_log", arr.toString()).apply()
+    }
+
+    /** The stored request body for a log entry, or null if it was never stored or is gone. */
+    fun sendLogPayload(id: String): String? = try {
+        File(sendLogDir, "$id.json").takeIf { it.exists() }?.readText()
+    } catch (e: Exception) {
+        null
     }
 
     // Chainway's 1-30 dBm range as a fallback for a device type that isn't picked yet (shouldn't
