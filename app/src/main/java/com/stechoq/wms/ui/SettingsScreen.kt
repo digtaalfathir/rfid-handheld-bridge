@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
@@ -55,6 +54,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.stechoq.wms.BuildConfig
+import com.stechoq.wms.DropdownFetchState
 import com.stechoq.wms.ScanViewModel
 import com.stechoq.wms.data.AppLanguage
 import com.stechoq.wms.data.FactoryCodeOption
@@ -83,6 +85,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+
+// How long the operator has to stop typing in Base URL before RR Type / Factory Code are fetched —
+// the field fires per keystroke, and every partial URL along the way isn't worth a request.
+private const val BASE_URL_DEBOUNCE_MS = 1000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,7 +103,6 @@ fun SettingsScreen(
     val strings = LocalStrings.current
     var draft by remember { mutableStateOf(viewModel.config.value) }
     var errors by remember { mutableStateOf(emptyMap<String, ValidationErrorType>()) }
-    var testing by remember { mutableStateOf(false) }
     var showLogHistory by remember { mutableStateOf(false) }
     val powerRange = remember { viewModel.powerRange }
     val antennaOptions = remember { viewModel.antennaOptions() }
@@ -105,6 +111,42 @@ fun SettingsScreen(
     val endpointOptions = remember { viewModel.endpointOptions() }
     val initialYearOptions = remember { viewModel.initialYearOptions() }
     var factoryCodeOptions by remember { mutableStateOf(viewModel.factoryCodeOptions()) }
+    val fetchState by viewModel.dropdownFetch.collectAsState()
+    // Set by a pick from the Base URL menu, so the effect below fetches right away instead of
+    // waiting out the typing debounce.
+    var skipDebounce by remember { mutableStateOf(false) }
+    var isFirstBaseUrlEffect by remember { mutableStateOf(true) }
+
+    LaunchedEffect(draft.baseUrl) {
+        // Any change cancels the fetch in flight, and any status left from an earlier visit.
+        viewModel.cancelDropdownFetch()
+        if (isFirstBaseUrlEffect) {
+            isFirstBaseUrlEffect = false
+            // Opening Settings isn't a Base URL change — only fetch when there's nothing cached
+            // to show (fresh install, or after Reset).
+            val cacheEmpty = rrTypeOptions.isEmpty() || factoryCodeOptions.isEmpty()
+            if (cacheEmpty && ScanConfig.isFetchableBaseUrl(draft.baseUrl)) {
+                viewModel.fetchDropdownData(draft.baseUrl)
+            }
+            return@LaunchedEffect
+        }
+        // Typing again restarts this effect, which cancels the delay — so only the last
+        // keystroke's URL ever gets fetched.
+        if (!skipDebounce) delay(BASE_URL_DEBOUNCE_MS)
+        skipDebounce = false
+        if (ScanConfig.isFetchableBaseUrl(draft.baseUrl)) {
+            viewModel.fetchDropdownData(draft.baseUrl)
+        }
+    }
+
+    LaunchedEffect(fetchState) {
+        val state = fetchState
+        if (state is DropdownFetchState.Success && state.baseUrl == draft.baseUrl) {
+            rrTypeOptions = state.rrTypes
+            factoryCodeOptions = state.factoryCodes
+            draft = draft.keepingOnlyAvailable(state.rrTypes, state.factoryCodes)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -219,9 +261,24 @@ fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
 
             SectionCard(title = strings.apiConfigTitle, icon = Icons.Filled.Cloud) {
-                DropdownField(strings.baseUrlLabel, draft.baseUrl, baseUrlOptions, errors["baseUrl"]?.let(strings::validationMessage)) {
+                DropdownField(
+                    strings.baseUrlLabel,
+                    draft.baseUrl,
+                    baseUrlOptions,
+                    errors["baseUrl"]?.let(strings::validationMessage),
+                    onOptionSelected = { picked ->
+                        if (picked == draft.baseUrl) {
+                            // Unchanged, so the effect won't re-run — treat the pick as a refresh.
+                            viewModel.fetchDropdownData(picked)
+                        } else {
+                            skipDebounce = true
+                            draft = draft.copy(baseUrl = picked)
+                        }
+                    }
+                ) {
                     draft = draft.copy(baseUrl = it)
                 }
+                DropdownFetchStatus(fetchState, onRetry = { viewModel.fetchDropdownData(draft.baseUrl) })
                 Spacer(Modifier.height(8.dp))
                 DropdownField(strings.endpointLabel, draft.endpoint, endpointOptions, errors["endpoint"]?.let(strings::validationMessage)) {
                     draft = draft.copy(endpoint = it)
@@ -231,35 +288,6 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 DropdownField(strings.antennaLabel, draft.antenna, antennaOptions, errors["antenna"]?.let(strings::validationMessage)) {
                     draft = draft.copy(antenna = it)
-                }
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = {
-                        testing = true
-                        viewModel.testConnection(draft.fullApiUrl()) { connectionError ->
-                            viewModel.fetchDropdownData(draft.baseUrl) { fetchOk ->
-                                testing = false
-                                rrTypeOptions = viewModel.rrTypeOptions()
-                                factoryCodeOptions = viewModel.factoryCodeOptions()
-                                val message = when {
-                                    connectionError != null -> "${strings.testFailedPrefix}$connectionError"
-                                    !fetchOk -> strings.dropdownFetchFailed
-                                    else -> strings.serverReachable
-                                }
-                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
-                    enabled = !testing,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (testing) {
-                        CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Filled.NetworkCheck, contentDescription = null)
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (testing) strings.testing else strings.testConnection)
                 }
             }
 
@@ -420,6 +448,11 @@ fun SettingsScreen(
                     onClick = {
                         draft = viewModel.resetConfig()
                         errors = emptyMap()
+                        // Reset wipes the cached lists too — without this the dropdowns would
+                        // keep showing them until Settings is reopened.
+                        rrTypeOptions = viewModel.rrTypeOptions()
+                        factoryCodeOptions = viewModel.factoryCodeOptions()
+                        viewModel.cancelDropdownFetch()
                         Toast.makeText(context, strings.configResetToast, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.weight(1f)
@@ -508,9 +541,19 @@ private fun ReadOnlyField(label: String, value: String) {
  * letting the user place a cursor, so a picked value could never be cleared to type something
  * outside the list. The icon button is the only thing that opens/closes the menu; the field
  * itself behaves like any other text field at all times.
+ *
+ * [onOptionSelected] lets a caller tell a menu pick apart from typing (Base URL fetches on a pick
+ * immediately, but debounces typing); left null, a pick goes through [onValueChange] like typing.
  */
 @Composable
-private fun DropdownField(label: String, value: String, options: List<String>, error: String?, onValueChange: (String) -> Unit) {
+private fun DropdownField(
+    label: String,
+    value: String,
+    options: List<String>,
+    error: String?,
+    onOptionSelected: ((String) -> Unit)? = null,
+    onValueChange: (String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedTextField(
@@ -532,11 +575,48 @@ private fun DropdownField(label: String, value: String, options: List<String>, e
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
-                        onValueChange(option)
+                        (onOptionSelected ?: onValueChange)(option)
                         expanded = false
                     }
                 )
             }
+        }
+    }
+}
+
+/** The RR Type / Factory Code fetch status shown under Base URL — replaces the old Toast, which
+ * vanished before an operator could read it and left no way to retry. */
+@Composable
+private fun DropdownFetchStatus(state: DropdownFetchState, onRetry: () -> Unit) {
+    val strings = LocalStrings.current
+    when (state) {
+        DropdownFetchState.Idle -> Unit
+        is DropdownFetchState.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                strings.dropdownFetchLoading,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        is DropdownFetchState.Success -> Text(
+            strings.dropdownFetchConnected(state.rrTypes.size, state.factoryCodes.size),
+            style = MaterialTheme.typography.bodySmall,
+            color = SuccessGreen
+        )
+        is DropdownFetchState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(strings.dropdownFetchFailed, style = MaterialTheme.typography.bodySmall, color = ErrorRed)
+                if (state.hasStaleCache) {
+                    Text(
+                        strings.dropdownFetchStaleHint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            TextButton(onClick = onRetry) { Text(strings.tryAgain) }
         }
     }
 }

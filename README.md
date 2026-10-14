@@ -279,7 +279,13 @@ Every section, top to bottom, each with its own icon:
 ![Scan Mode and Mode sections](docs/screenshots/settings-scan-mode-and-mode.png)
 
 - **API Configuration**
-  - **Base URL** — editable dropdown, remembers anything you type
+  - **Base URL** — editable dropdown, remembers anything you type. Changing it automatically
+    fetches the **RR Type** and **Factory Code** lists from that server (see below): right away
+    when picked from the dropdown, or once you stop typing for about a second when typed by hand
+    (only for a URL starting with `http://` or `https://`). A status line under the field shows
+    *Fetching data…*, *Connected · X RR Type, Y Factory* (green), or *Failed to fetch data from
+    the server* (red) with a **Try again** button. Changing the URL again mid-fetch cancels the
+    earlier one, so the lists always come from the last URL entered.
   - **Endpoint** — editable dropdown, defaults to the shared endpoint; independent of Mode
   - **Reader ID** — read-only, auto-derived from the device (`<model>-<short Android ID>`) so
     every handheld in a fleet gets a unique, human-readable ID with zero per-device setup
@@ -287,16 +293,18 @@ Every section, top to bottom, each with its own icon:
 
 ![API Configuration section](docs/screenshots/settings-api-config.png)
 
-  - **Test & Get Data** — pings the configured Base URL and, in the same tap, fetches the **RR
-    Type** and **Factory Code** lists from it (see below)
 - **Register Configuration** — Maker Name and Initial Year are editable dropdowns that remember
   custom entries; **RR Type** and **Factory Code** are selection-only (no manual typing) and
-  populated by the **Test & Get Data** button above from `{baseUrl}/api/v1/master/dropdown/rr-type/components`
-  and `{baseUrl}/api/v1/master/warehouse-factory/` respectively — Factory Code shows "code - name"
-  in the list but only the code is stored and sent. Both lists are cached on the device, so they
-  stay populated across app restarts until the button is tapped again.
+  fetched from `{baseUrl}/api/v1/master/dropdown/rr-type/components` and
+  `{baseUrl}/api/v1/master/warehouse-factory/` respectively — Factory Code shows "code - name"
+  in the list but only the code is stored and sent. Both lists are cached on the device (one
+  cache, overwritten only when both fetches succeed), so they stay populated across app
+  restarts; Settings fetches on open only when that cache is empty (fresh install, or after
+  Reset). On a failed fetch the old cache is kept and the status line notes it may be from the
+  previous server. After a successful fetch, a selected RR Type or Factory Code that the new
+  server doesn't have is cleared, so a code from the old server is never sent to the new one.
 
-![Test & Get Data button and Register Configuration](docs/screenshots/settings-test-connection-register.png)
+![Register Configuration](docs/screenshots/settings-test-connection-register.png)
 
 - **Power** — native range per vendor, not an abstracted scale: **Chainway 1–30 dBm**, **Zebra
   0–300** (matching Zebra's own 123RFID app's units directly). **Hidden entirely in Barcode mode**,

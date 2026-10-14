@@ -77,16 +77,6 @@ class ApiClient {
         }
     }
 
-    /** Returns null when the host responds at all (any status code), a reason otherwise. */
-    fun testConnection(apiUrl: String): String? {
-        return try {
-            val request = Request.Builder().url(apiUrl).get().build()
-            client.newCall(request).execute().use { null }
-        } catch (e: Exception) {
-            e.message ?: e.javaClass.simpleName
-        }
-    }
-
     // Path is fixed and not user-facing — a settings-screen convenience, not something an
     // operator would ever need to point elsewhere the way baseUrl/endpoint are.
     private val RR_TYPE_PATH = "/api/v1/master/dropdown/rr-type/components?factory_id=&category_id="

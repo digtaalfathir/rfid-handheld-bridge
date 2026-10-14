@@ -63,6 +63,23 @@ data class ScanConfig(
          * also what [initialYear] defaults to. */
         fun initialYearOptions(currentYear: Int = Calendar.getInstance().get(Calendar.YEAR)): List<String> =
             (FIRST_INITIAL_YEAR..currentYear).map { it.toString() }
+
+        /** Whether [url] is complete enough to be worth fetching from — a scheme alone ("http://",
+         * mid-typing) would otherwise fire a request at an empty host. */
+        fun isFetchableBaseUrl(url: String): Boolean =
+            listOf("http://", "https://").any { url.startsWith(it) && url.length > it.length }
+    }
+
+    /** Drops an rrType/factoryCode the freshly fetched lists don't contain — so a selection made
+     * against one server can't ride along to another — and re-syncs factoryId to the matching
+     * entry, since the same code can carry a different id on a different server. */
+    fun keepingOnlyAvailable(rrTypes: List<String>, factoryCodes: List<FactoryCodeOption>): ScanConfig {
+        val factory = factoryCodes.find { it.code == factoryCode }
+        return copy(
+            rrType = rrType.takeIf { it in rrTypes } ?: "",
+            factoryCode = factory?.code ?: "",
+            factoryId = factory?.id ?: 0
+        )
     }
 
     /** Combines baseUrl + endpoint into the full request URL, regardless of slashes on either side. */

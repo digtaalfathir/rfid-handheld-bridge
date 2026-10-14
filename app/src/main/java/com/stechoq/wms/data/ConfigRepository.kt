@@ -139,8 +139,9 @@ class ConfigRepository(context: Context) {
         (ScanConfig.ANTENNA_OPTIONS + customOptions("custom_antenna_options")).distinct()
 
     // RR Type and Factory Code are no longer hardcoded or manually typeable — both are fetched
-    // live from the configured Base URL (Settings' "Test & Get Data" button) and cached here so
-    // the dropdown stays populated across app restarts without needing a fetch on every visit.
+    // live from the configured Base URL (automatically, whenever it changes in Settings) and
+    // cached here so the dropdown stays populated across app restarts without needing a fetch on
+    // every visit. One cache for whichever server was fetched last — not keyed per Base URL.
     fun rrTypeOptions(): List<String> {
         val raw = prefs.getString("cached_rr_types", null) ?: return emptyList()
         return try {
