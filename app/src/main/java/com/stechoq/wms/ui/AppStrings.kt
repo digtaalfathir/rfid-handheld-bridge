@@ -38,6 +38,11 @@ data class AppStrings(
     val tagWord: String,
     val systemErrorGeneric: String,
     val retry: String,
+    val unsentTagsTitle: String,
+    val unsentTagsMessagePrefix: String,
+    val unsentTagsMessageSuffix: String,
+    val unsentTagsSendFirst: String,
+    val unsentTagsDiscard: String,
     val emptyTagList: String,
     val searchPlaceholder: String,
     val tagNew: String,
@@ -159,6 +164,8 @@ data class AppStrings(
         SortOption.QUALITY_DESC -> sortQuality
     }
 
+    fun unsentTagsMessage(count: Int): String = "$unsentTagsMessagePrefix$count$unsentTagsMessageSuffix"
+
     fun reasonLabel(reason: ReplacementReason): String = when (reason) {
         ReplacementReason.DAMAGED -> replacementReasonDamaged
         ReplacementReason.UNREADABLE -> replacementReasonUnreadable
@@ -211,6 +218,11 @@ val EnglishStrings = AppStrings(
     tagWord = "tags",
     systemErrorGeneric = "System error, please contact WMS Team",
     retry = "Retry",
+    unsentTagsTitle = "Unsent tags",
+    unsentTagsMessagePrefix = "There are ",
+    unsentTagsMessageSuffix = " tags that haven't been sent to the server yet. Send them first, or discard them and start a new scan?",
+    unsentTagsSendFirst = "Send first",
+    unsentTagsDiscard = "Discard & new scan",
     emptyTagList = "No tags read yet",
     searchPlaceholder = "Search EPC...",
     tagNew = "NEW",
@@ -333,6 +345,11 @@ val IndonesianStrings = AppStrings(
     tagWord = "tag",
     systemErrorGeneric = "Terjadi kesalahan sistem, silakan hubungi Tim WMS",
     retry = "Retry",
+    unsentTagsTitle = "Tag belum terkirim",
+    unsentTagsMessagePrefix = "Ada ",
+    unsentTagsMessageSuffix = " tag yang belum terkirim ke server. Kirim dulu, atau buang dan mulai scan baru?",
+    unsentTagsSendFirst = "Kirim dulu",
+    unsentTagsDiscard = "Buang & scan baru",
     emptyTagList = "Belum ada tag terbaca",
     searchPlaceholder = "Cari EPC...",
     tagNew = "BARU",
