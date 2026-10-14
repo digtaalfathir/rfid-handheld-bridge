@@ -103,7 +103,9 @@ data class ScanUiState(
     val sortOption: SortOption = SortOption.LAST_SEEN_DESC,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
     val barcodeScans: List<BarcodeScanRecord> = emptyList(),
-    val replacementPrompt: ReplacementPrompt? = null
+    val replacementPrompt: ReplacementPrompt? = null,
+    // Non-null while the "unsent tags" confirmation is showing.
+    val unsentTagsPrompt: UnsentTagsPrompt? = null
 )
 
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
@@ -242,8 +244,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Physical trigger, pressed: hold-to-scan (RFID) or arm the barcode decoder (Barcode) —
-     * whichever manager owns the trigger for the currently selected InputMode. Always restarts
-     * fresh when tags are already present, for RFID. */
+     * whichever manager owns the trigger for the currently selected InputMode. Restarts fresh
+     * when tags are already present, for RFID — via [requestNewScan], so unsent tags aren't
+     * silently dropped. */
     fun onTriggerPressed() {
         if (!canScanNow()) return
         if (_config.value.inputMode == InputMode.BARCODE) {
@@ -252,7 +255,51 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
         val s = _uiState.value
         if (s.scanning) return
-        if (s.tags.isEmpty()) toggleScan() else startNewScan()
+        if (s.tags.isEmpty()) toggleScan() else requestNewScan(fromTrigger = true)
+    }
+
+    /** New Scan button / trigger with tags present: starts fresh unless the tags on screen were
+     * never delivered — then the operator decides (send first, or discard) via the confirmation
+     * dialog. While a send is still in flight the request is ignored until its result is known. */
+    fun requestNewScan(fromTrigger: Boolean = false) {
+        val s = _uiState.value
+        when (newScanDecision(s.sendStatus, s.tags.size)) {
+            NewScanDecision.START -> startNewScan()
+            NewScanDecision.IGNORE -> Unit
+            // Backgrounded (Background Scanning on): there's no screen to show the dialog on, so
+            // the trigger does nothing — the bubble already shows red for the failed send, and
+            // the operator gets the choice once they open the app and press again.
+            NewScanDecision.CONFIRM_DISCARD -> if (isAppVisible()) {
+                _uiState.update { it.copy(unsentTagsPrompt = UnsentTagsPrompt(s.tags.size, fromTrigger)) }
+            }
+        }
+    }
+
+    /** "Send first" in the unsent-tags dialog — same as the Retry button; tags stay on screen. */
+    fun sendUnsentTagsFirst() {
+        dismissUnsentTagsPrompt()
+        retrySend()
+    }
+
+    /** "Discard & new scan" in the unsent-tags dialog — the operator's explicit choice. See
+     * [UnsentTagsPrompt.fromTrigger] for why the trigger case only clears. */
+    fun discardUnsentTags() {
+        val prompt = _uiState.value.unsentTagsPrompt ?: return
+        dismissUnsentTagsPrompt()
+        if (!prompt.fromTrigger) {
+            startNewScan()
+            return
+        }
+        synchronized(tagMap) { tagMap.clear() }
+        sessionBaselineEpcs = emptySet()
+        publishTags()
+        // The failed-send banner (and its Retry) would otherwise linger over an empty list.
+        _uiState.update { it.copy(sendStatus = SendStatus.Idle) }
+        ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+    }
+
+    fun dismissUnsentTagsPrompt() {
+        _uiState.update { it.copy(unsentTagsPrompt = null) }
     }
 
     /** Physical trigger, released: stop (mirrors the on-screen Stop Scan button in RFID mode). */
@@ -289,8 +336,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
      * check (not Activity focus) is what actually enforces the setting. */
     private fun canScanNow(): Boolean {
         if (_config.value.backgroundScanEnabled) return true
-        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        return isAppVisible()
     }
+
+    private fun isAppVisible(): Boolean =
+        ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
     /** Clears previously collected tags, then starts a scan from scratch. */
     fun startNewScan() {

@@ -60,7 +60,20 @@ The main screen, and the only one an operator needs day to day.
   scan the same as tapping Stop
 - **New Scan vs Continue** — once a session has tags, the button row splits: **New Scan** clears
   everything and starts fresh, **Continue** keeps existing tags and resumes scanning (useful for
-  scanning a large area in passes without losing earlier reads)
+  scanning a large area in passes without losing earlier reads). Pressing the physical trigger
+  while tags are on screen is the same as **New Scan**
+- **Unsent tags are never cleared silently** — if the last send **failed** (any reason: WiFi
+  down, timeout, server error, or the server rejecting the data) and tags are still on screen,
+  **New Scan** or the trigger first asks: *"There are X tags that haven't been sent… "* with
+  **Send first** (same as Retry — tags stay until sent), **Discard & new scan**, or **Cancel**.
+  When the dialog came from the trigger, Discard only clears the list — hold the trigger again
+  to scan (the trigger is hold-to-scan, and it's no longer held by the time the dialog is
+  tapped); from the on-screen New Scan button it clears and starts scanning, like that button.
+  After a successful send it starts fresh right away, as before. While a send is still in
+  progress (*Sending…*), New Scan is disabled and the trigger is ignored until the result is in.
+  With Background Scanning on and the app not on screen, the trigger is ignored in that failed
+  state (there's no screen to ask on) — the floating bubble stays red until the operator opens
+  the app and chooses
 - **Send status** — after a scan stops, the collected tags post to your API automatically; a
   banner shows Sending → Sent (n tags) or a Retry button on failure. On failure, the banner shows
   a plain-language message rather than the raw server response — see
