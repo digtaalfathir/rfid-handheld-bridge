@@ -27,6 +27,7 @@ data class AppStrings(
     // Scan screen
     val appTitle: String,
     val settingsDescription: String,
+    val configChipsOpenSettings: String,
     val totalDetected: String,
     val totalUnique: String,
     val lastScanPrefix: String,
@@ -69,6 +70,10 @@ data class AppStrings(
     val installUpdateButton: String,
     val updateErrorPrefix: String,
     val updateLater: String,
+    val updateConfirmTitle: String,
+    val updateConfirmVersionPrefix: String,
+    val updateConfirmBody: String,
+    val updateConfirmDownload: String,
 
     // Barcode mode
     val barcodeEmptyList: String,
@@ -177,6 +182,10 @@ data class AppStrings(
 ) {
     fun sentSuccess(count: Int): String = "$sentPrefix ($count $tagWord)"
 
+    /** e.g. "Versi v1.5.15 akan diunduh. …" — the version is left out when not known (a retry). */
+    fun updateConfirmMessage(version: String?): String =
+        listOfNotNull(version?.let { "$updateConfirmVersionPrefix$it." }, updateConfirmBody).joinToString(" ")
+
     /** e.g. "16 tag belum terkirim — Terjadi kesalahan sistem, silakan hubungi Tim WMS". */
     fun unsentSendError(count: Int, reason: String): String = "$count $tagWord $notSentLabel — $reason"
 
@@ -256,6 +265,7 @@ val EnglishStrings = AppStrings(
 
     appTitle = "WMS RFID Suite",
     settingsDescription = "Settings",
+    configChipsOpenSettings = "Open Settings",
     totalDetected = "Total Detected",
     totalUnique = "Total Unique",
     lastScanPrefix = "Last scan: ",
@@ -298,6 +308,10 @@ val EnglishStrings = AppStrings(
     installUpdateButton = "Install",
     updateErrorPrefix = "Update failed: ",
     updateLater = "Later",
+    updateConfirmTitle = "Download update?",
+    updateConfirmVersionPrefix = "Version v",
+    updateConfirmBody = "The update will be downloaded now; when it finishes, tap Install to install it.",
+    updateConfirmDownload = "Download update",
 
     barcodeEmptyList = "No barcodes scanned yet",
     barcodeHint = "Hold the trigger to scan a barcode",
@@ -411,6 +425,7 @@ val IndonesianStrings = AppStrings(
 
     appTitle = "WMS RFID Suite",
     settingsDescription = "Pengaturan",
+    configChipsOpenSettings = "Buka Pengaturan",
     totalDetected = "Total Terdeteksi",
     totalUnique = "Total Unik",
     lastScanPrefix = "Scan terakhir: ",
@@ -454,6 +469,10 @@ val IndonesianStrings = AppStrings(
     installUpdateButton = "Pasang",
     updateErrorPrefix = "Update gagal: ",
     updateLater = "Nanti",
+    updateConfirmTitle = "Unduh update?",
+    updateConfirmVersionPrefix = "Versi v",
+    updateConfirmBody = "Update akan diunduh sekarang; setelah selesai, tekan Pasang untuk memasangnya.",
+    updateConfirmDownload = "Unduh update",
 
     barcodeEmptyList = "Belum ada barcode discan",
     barcodeHint = "Tahan trigger untuk scan barcode",

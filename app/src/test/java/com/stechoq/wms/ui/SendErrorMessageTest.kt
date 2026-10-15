@@ -22,6 +22,15 @@ class SendErrorMessageTest {
     }
 
     @Test
+    fun updateConfirmNamesVersionWhenKnown() {
+        assertEquals(
+            "Versi v1.5.15. Update akan diunduh sekarang; setelah selesai, tekan Pasang untuk memasangnya.",
+            IndonesianStrings.updateConfirmMessage("1.5.15")
+        )
+        assertEquals(IndonesianStrings.updateConfirmBody, IndonesianStrings.updateConfirmMessage(null))
+    }
+
+    @Test
     fun sendRetryButtonIsTranslated() {
         assertEquals("Kirim Ulang", IndonesianStrings.retrySend)
         assertEquals("Retry", EnglishStrings.retrySend)

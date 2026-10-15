@@ -5,6 +5,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +82,7 @@ import com.stechoq.wms.data.BarcodeScanRecord
 import com.stechoq.wms.data.BarcodeSendStatus
 import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ReplacementReason
+import com.stechoq.wms.data.ScanConfig
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
 import com.stechoq.wms.network.formatSendError
@@ -141,6 +144,9 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            ConfigChipsRow(config = config, onClick = onOpenSettings)
+            Spacer(Modifier.height(8.dp))
+
             if (state.updateStatus !is UpdateStatus.Idle && !state.updateBannerHidden) {
                 UpdateBanner(
                     status = state.updateStatus,
@@ -411,12 +417,83 @@ private fun SummaryCard(
     }
 }
 
+/** The saved config at a glance — before this, only Barcode mode had any on-screen cue, so a
+ * wrong mode/server/factory only showed up after data had already gone out. Reads the saved
+ * config, so it updates as soon as Settings saves. Scrolls sideways rather than cutting off; the
+ * whole row opens Settings. */
+@Composable
+private fun ConfigChipsRow(config: ScanConfig, onClick: () -> Unit) {
+    val strings = LocalStrings.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = strings.configChipsOpenSettings, onClick = onClick)
+            .horizontalScroll(rememberScrollState())
+    ) {
+        val isBarcode = config.inputMode == InputMode.BARCODE
+        ConfigChip(strings.scanModeLabel(config.inputMode), accent = if (isBarcode) BarcodeAccent else null)
+        ConfigChip(config.mode.label)
+        if (config.opname) ConfigChip(strings.logOpname)
+        // Scanning behaves completely differently with Replacement on — hard to miss on purpose.
+        if (config.replacementActive) ConfigChip(strings.logTypeReplacement, accent = WarningAmber)
+        // A missing RR Type / Factory Code would go out empty — shown as a red "–" chip instead.
+        MissingAwareChip(strings.rrTypeLabel, config.rrType)
+        MissingAwareChip(strings.factoryCodeLabel, config.factoryCode)
+        ScanConfig.serverShortName(config.baseUrl).takeIf { it.isNotBlank() }?.let { ConfigChip(it) }
+    }
+}
+
+@Composable
+private fun MissingAwareChip(label: String, value: String) {
+    if (value.isNotBlank()) ConfigChip(value) else ConfigChip("$label –", accent = ErrorRed)
+}
+
+/** [accent] fills the chip (white text) for the ones that must stand out; plain chips are muted. */
+@Composable
+private fun ConfigChip(text: String, accent: Color? = null) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = accent ?: MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (accent != null) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (accent != null) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
 // Single slim row (about half the old card's height) — it shares the screen with the tag list.
 private val UPDATE_BANNER_HEIGHT = 32.dp
 
 @Composable
 internal fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstall: () -> Unit, onLater: (() -> Unit)? = null) {
     val strings = LocalStrings.current
+    // The banner sits right under the config chips, which are tapped often — a stray extra tap
+    // landing on Update shouldn't start a download on its own, so it's confirmed first.
+    var confirmDownload by remember { mutableStateOf(false) }
+    if (confirmDownload) {
+        val version = (status as? UpdateStatus.Available)?.info?.version
+        AlertDialog(
+            onDismissRequest = { confirmDownload = false },
+            title = { Text(strings.updateConfirmTitle, fontWeight = FontWeight.SemiBold) },
+            text = { Text(strings.updateConfirmMessage(version)) },
+            confirmButton = {
+                Button(onClick = {
+                    confirmDownload = false
+                    onDownload()
+                }) { Text(strings.updateConfirmDownload) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDownload = false }) { Text(strings.cancel) }
+            }
+        )
+    }
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         shape = RoundedCornerShape(8.dp),
@@ -430,7 +507,7 @@ internal fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstal
             when (status) {
                 is UpdateStatus.Available -> {
                     BannerText("${strings.updateAvailablePrefix}${status.info.version}")
-                    TextButton(onClick = onDownload, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
+                    TextButton(onClick = { confirmDownload = true }, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
                         Text(strings.updateNowButton, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     }
                     onLater?.let { BannerLaterButton(it) }
@@ -449,7 +526,7 @@ internal fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstal
                 }
                 is UpdateStatus.Error -> {
                     BannerText("${strings.updateErrorPrefix}${status.message}", color = ErrorRed)
-                    TextButton(onClick = onDownload, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
+                    TextButton(onClick = { confirmDownload = true }, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
                         Text(strings.retry, style = MaterialTheme.typography.labelMedium)
                     }
                     onLater?.let { BannerLaterButton(it) }

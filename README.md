@@ -54,6 +54,14 @@ The main screen, and the only one an operator needs day to day.
 
 ![Scan screen, idle](docs/screenshots/scan-empty.png)
 
+- **Active-config chips** — a row of small chips just under the title showing the saved config,
+  so a wrong setting is caught before anything is sent: scan type (**RFID** / **Barcode**, purple
+  for Barcode), **WO** / **Register**, **Opname** (only when on), **Replacement** (only when active
+  — orange, since scanning behaves completely differently), the **RR Type**, the **Factory Code**,
+  and the server's short name from Base URL (e.g. `wms.suite`, `product.suite`). An empty RR
+  Type or Factory Code shows as a red *"RR Type –"* / *"Factory Code –"* chip. The row scrolls
+  sideways when it doesn't fit, updates as soon as Settings is saved, and tapping it opens
+  Settings
 - **Summary card** — total tags detected (raw reads) and total unique tags this session, plus the
   time of the last completed scan
 - **Start Scan / Stop Scan** — tap, or hold the physical trigger; releasing the trigger stops the
@@ -295,7 +303,10 @@ The app checks this repo's GitHub Releases for a newer version on every launch a
 returns to the foreground (throttled to at most once every 5 minutes). If a newer release exists,
 a slim one-line banner appears on the Scan screen:
 
-1. **Update available: vX.Y.Z** → tap **Update** to download
+1. **Update available: vX.Y.Z** → tap **Update**, then confirm **Download update** in the dialog
+   (*Cancel* leaves everything as is — the banner sits just under the often-tapped config chips,
+   so a stray tap mustn't start a download on its own; the same applies to *Retry* after a
+   failed download)
 2. Once downloaded, tap **Install** — this hands off to Android's standard package installer
 3. The very first time on a given device, Android may show its own "allow installs from this app"
    permission screen — a one-time approval per device, not per update

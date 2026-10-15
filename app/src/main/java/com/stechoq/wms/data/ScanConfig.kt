@@ -68,6 +68,17 @@ data class ScanConfig(
          * mid-typing) would otherwise fire a request at an empty host. */
         fun isFetchableBaseUrl(url: String): Boolean =
             listOf("http://", "https://").any { url.startsWith(it) && url.length > it.length }
+
+        /** Short server label for the Scan screen's config chips: "https://wms.suite.stechoq-j.com"
+         * → "wms.suite"; an IP address (or a bare hostname) is kept whole, with its port. */
+        fun serverShortName(baseUrl: String): String {
+            val hostPort = baseUrl.trim().substringAfter("://").substringBefore('/')
+            if (hostPort.isBlank()) return ""
+            val host = hostPort.substringBefore(':')
+            val labels = host.split('.')
+            val isIp = labels.size == 4 && labels.all { it.toIntOrNull() != null }
+            return if (isIp || labels.size < 3) hostPort else labels.take(2).joinToString(".")
+        }
     }
 
     /** Drops an rrType/factoryCode the freshly fetched lists don't contain — so a selection made
