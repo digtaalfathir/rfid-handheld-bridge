@@ -368,7 +368,14 @@ Every section, top to bottom, each with its own icon:
 - **Reset** — clears everything above back to defaults (never touches device type or language),
   after a confirmation dialog (*Cancel* / red *Reset*) — a stray tap can't wipe Base URL, Factory
   Code and the rest, and Cancel leaves even unsaved edits as they were
-- **Save** — validates and persists; the app's current version is shown just below this row
+- **Save** — validates and persists; disabled while nothing has changed. **Reset** and **Save**
+  sit in a bar pinned to the bottom of the screen, so they're always visible without scrolling;
+  the app's current version is shown at the very end of the page
+- **Unsaved changes** — leaving Settings (top-bar arrow or the Android back button) with changes
+  not yet saved asks *"Save changes?"* — **Save** (validation still applies: if it fails you stay
+  in Settings with the errors shown), **Discard**, or **Cancel**. With nothing changed, back
+  leaves right away. Changes Settings makes on its own count too — e.g. switching Base URL clears
+  an RR Type / Factory Code the new server doesn't have
 
 ![Language, Reset/Save, and the version footer](docs/screenshots/settings-lang-reset-save.png)
 

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -153,16 +155,72 @@ fun SettingsScreen(
         }
     }
 
+    // Unsaved = the draft differs from what's actually saved. This includes edits Settings made
+    // on its own (e.g. a Base URL change clearing an RR Type the new server doesn't have) — those
+    // are just as lost on leaving without Save.
+    val savedConfig by viewModel.config.collectAsState()
+    val hasUnsavedChanges = draft != savedConfig
+    var showUnsavedConfirm by remember { mutableStateOf(false) }
+
+    // Validation still applies however Save is reached; on failure stay here with errors shown.
+    fun saveAndExit() {
+        val result = viewModel.saveConfig(draft)
+        errors = result
+        if (result.isEmpty()) {
+            Toast.makeText(context, strings.configSavedToast, Toast.LENGTH_SHORT).show()
+            onDone()
+        } else {
+            Toast.makeText(context, strings.configInvalidToast, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun requestExit() {
+        if (hasUnsavedChanges) showUnsavedConfirm = true else onDone()
+    }
+
+    // The Android back button/gesture, same as the top bar's arrow.
+    BackHandler { requestExit() }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(strings.settingsTitle, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    IconButton(onClick = onDone) {
+                    IconButton(onClick = { requestExit() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = strings.backDescription)
                     }
                 }
             )
+        },
+        // Pinned so Save/Reset never need a scroll to the bottom of this long page.
+        bottomBar = {
+            Surface(shadowElevation = 8.dp) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    OutlinedButton(
+                        // Wipes every setting and the dropdown cache in one tap — always confirmed first.
+                        onClick = { showResetConfirm = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.RestartAlt, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.reset)
+                    }
+                    Button(
+                        onClick = { saveAndExit() },
+                        enabled = hasUnsavedChanges,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.Save, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.save)
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -463,38 +521,21 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(Modifier.height(20.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    // Wipes every setting and the dropdown cache in one tap — always confirmed first.
-                    onClick = { showResetConfirm = true },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Filled.RestartAlt, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.reset)
-                }
-                Button(
-                    onClick = {
-                        val result = viewModel.saveConfig(draft)
-                        errors = result
-                        if (result.isEmpty()) {
-                            Toast.makeText(context, strings.configSavedToast, Toast.LENGTH_SHORT).show()
-                            onDone()
-                        } else {
-                            Toast.makeText(context, strings.configInvalidToast, Toast.LENGTH_SHORT).show()
-                        }
+            if (showUnsavedConfirm) {
+                UnsavedChangesDialog(
+                    onSave = {
+                        showUnsavedConfirm = false
+                        saveAndExit()
                     },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Filled.Save, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.save)
-                }
+                    onDiscard = {
+                        showUnsavedConfirm = false
+                        onDone()
+                    },
+                    onCancel = { showUnsavedConfirm = false }
+                )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
             Text(
                 "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
@@ -670,6 +711,26 @@ private fun SelectOnlyDropdownField(label: String, value: String, options: List<
             }
         }
     }
+}
+
+/** Leaving Settings (arrow or Android back) with edits not yet saved. */
+@Composable
+private fun UnsavedChangesDialog(onSave: () -> Unit, onDiscard: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.unsavedChangesTitle) },
+        text = { Text(strings.unsavedChangesMessage) },
+        confirmButton = {
+            Button(onClick = onSave) { Text(strings.save) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onCancel) { Text(strings.cancel) }
+                TextButton(onClick = onDiscard) { Text(strings.discard, color = ErrorRed) }
+            }
+        }
+    )
 }
 
 /** Reset clears every setting (Base URL, Factory Code, …) plus the dropdown cache, so a stray
