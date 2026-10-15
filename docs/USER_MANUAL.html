@@ -46,7 +46,7 @@
   <h1>Buku Panduan Penggunaan</h1>
   <div class="subtitle">Aplikasi Scan RFID &amp; Barcode untuk Handheld<br>Chainway C72 &amp; Zebra MC33 / MC3300x</div>
   <div class="meta">
-    Versi Aplikasi 1.5.x &nbsp;&bull;&nbsp; Edisi September 2026<br>
+    Versi Aplikasi 1.5.x &nbsp;&bull;&nbsp; Edisi Oktober 2026<br>
     Dokumen internal &mdash; untuk operator gudang dan tim IT
   </div>
 </div>
@@ -93,6 +93,9 @@ Management (WMS). Satu aplikasi yang sama dapat dipasang di dua merek perangkat 
 <li>Indikator <b>Kualitas</b> sinyal per tag (Kuat / Sedang / Lemah) &mdash; menggantikan angka RSSI mentah yang sulit dibaca operator</li>
 <li><b>Mode Barcode</b> &mdash; beralih dari RFID ke pemindai barcode 1D/2D dengan satu tombol di Pengaturan</li>
 <li>Dua alur pengiriman data: <b>WO</b> dan <b>Register</b>, dengan format data yang sama ke server</li>
+<li><b>Chip konfigurasi</b> di Layar Scan &mdash; mode, server, RR Type, dan Factory Code yang aktif selalu terlihat sebelum scan</li>
+<li><b>Nada hasil kirim</b> &mdash; berhasil dan gagal terdengar berbeda, jadi tidak perlu melihat layar</li>
+<li>Tag yang <b>belum terkirim tidak pernah terhapus diam-diam</b>, dan setiap pengiriman bisa <b>dikirim ulang</b> dari Riwayat Log</li>
 <li>Tetap bisa scan walau aplikasi di latar belakang, dengan bulatan status mengambang di layar</li>
 <li>Backup otomatis ke file CSV di perangkat, sebagai jaring pengaman saat WiFi gudang bermasalah</li>
 <li>Update aplikasi otomatis lewat internet, tanpa kabel data dan tanpa laptop</li>
@@ -140,22 +143,68 @@ digunakan. Semua pengaturan lain (URL server, mode WO/Register, dsb.) diisi lewa
 </div>
 
 <h3>Bagian-bagian layar</h3>
+<p>Tampilan dibuat ringkas agar daftar tag mendapat ruang sebanyak mungkin &mdash; di layar
+480&times;800 (Zebra MC33) minimal 5 baris tag terlihat tanpa perlu menggeser layar.</p>
 <ul>
-<li><b>Kartu ringkasan</b> &mdash; menampilkan <i>Total Terdeteksi</i> (jumlah total pembacaan) dan
-<i>Total Unik</i> (jumlah tag berbeda), serta waktu scan terakhir.</li>
+<li><b>Chip konfigurasi</b> &mdash; deretan label kecil tepat di bawah judul yang menampilkan
+pengaturan yang sedang aktif: jenis scan (<b>RFID</b> / <b>Barcode</b>, ungu untuk Barcode),
+<b>WO</b> / <b>Register</b>, <b>Opname</b> (jika aktif), <b>Penggantian</b> (jika aktif, berwarna
+oranye karena cara scan-nya berbeda total), <b>RR Type</b>, <b>Factory Code</b>, dan nama pendek
+server (mis. <i>wms.suite</i>, <i>product.suite</i>). RR Type atau Factory Code yang kosong tampil
+merah. Jika tidak muat, deretan ini bisa digeser ke samping. Ketuk deretan ini untuk membuka
+Pengaturan.</li>
+<li><b>Kartu ringkasan</b> &mdash; satu baris berisi jumlah tag <i>unik</i> (tag berbeda) dan
+<i>terdeteksi</i> (jumlah total pembacaan), serta di sebelah kanan waktu scan terakhir beserta
+status pengiriman (<i>Mengirim&hellip;</i>, <i>&#10003; Terkirim</i> hijau, atau &#10007; merah).
+Jumlah unik selalu menghitung semua tag, walau kotak Cari EPC sedang menyaring daftar.</li>
 <li><b>Mulai Scan / Stop Scan</b> &mdash; tekan tombol di layar, atau tahan tombol trigger fisik di
-handheld. Melepas trigger sama seperti menekan Stop.</li>
+handheld. Melepas trigger sama seperti menekan Stop. Tombol di layar bekerja dengan cara
+<i>ketuk untuk mulai, ketuk Stop untuk berhenti</i>; trigger fisik dengan cara <i>tahan untuk scan,
+lepas untuk berhenti</i>.</li>
 <li><b>Scan Baru vs Lanjutkan</b> &mdash; begitu ada tag terbaca, tombol berubah jadi dua pilihan:
   <ul>
-    <li><b>Scan Baru</b> &mdash; menghapus semua hasil sebelumnya dan mulai sesi baru dari nol</li>
+    <li><b>Scan Baru</b> &mdash; menghapus semua hasil sebelumnya dan langsung mulai sesi baru dari
+    nol. Menekan trigger fisik saat masih ada tag di layar sama dengan Scan Baru.</li>
     <li><b>Lanjutkan</b> &mdash; tetap menyimpan tag yang sudah ada dan melanjutkan scan (berguna
     untuk menyisir area luas tanpa kehilangan hasil sebelumnya)</li>
   </ul>
 </li>
-<li><b>Status pengiriman</b> &mdash; setelah scan berhenti, daftar tag otomatis dikirim ke server.
-Muncul status <i>Mengirim &rarr; Terkirim (n tag)</i>, atau pesan kegagalan (lihat Bab 4) dengan
-tombol <b>Coba Lagi</b>.</li>
+<li><b>Status pengiriman</b> &mdash; setelah scan berhenti, daftar tag otomatis dikirim ke server,
+dan hasilnya tampil di kartu ringkasan. Jika gagal, muncul pesan di bawah tombol beserta tombol
+<b>Kirim Ulang</b> (lihat Bab 4).</li>
+<li><b>Nada hasil kirim</b> &mdash; jika Suara aktif, terdengar <b>"tit-tit"</b> pendek saat
+terkirim, dan <b>tiga bunyi rendah</b> saat gagal, sehingga operator tahu hasilnya tanpa melihat
+layar &mdash; juga saat aplikasi sedang di latar belakang (Bab 9).</li>
 </ul>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/scan-sent.png" width="160" height="267"><div class="cap">Setelah scan: &#10003; Terkirim di kartu ringkasan</div></td>
+<td><img src="screenshots/scan-config-chips-replacement.png" width="160" height="267"><div class="cap">Chip konfigurasi &mdash; Penggantian aktif (oranye)</div></td>
+</tr>
+</table>
+
+<h3>Tag belum terkirim tidak terhapus diam-diam</h3>
+<p>Jika pengiriman terakhir <b>gagal</b> (WiFi putus, server error, data ditolak server, dsb.) dan
+tag masih ada di layar, menekan <b>Scan Baru</b> atau trigger fisik tidak langsung menghapus tag,
+melainkan muncul pertanyaan:</p>
+
+<div class="shot">
+  <img src="screenshots/scan-unsent-dialog.png" width="190" height="317">
+  <div class="cap">"Ada 18 tag yang belum terkirim ke server"</div>
+</div>
+
+<ul>
+<li><b>Kirim dulu</b> &mdash; mengirim ulang tag tersebut (sama dengan tombol Kirim Ulang); tag
+tetap di layar sampai berhasil</li>
+<li><b>Buang &amp; scan baru</b> &mdash; tag dibuang. Jika dialog muncul karena trigger fisik,
+daftar hanya dikosongkan &mdash; tahan trigger lagi untuk scan. Jika dari tombol Scan Baru, scan
+baru langsung dimulai.</li>
+<li><b>Batal</b> &mdash; tidak terjadi apa-apa</li>
+</ul>
+<p>Jika pengiriman terakhir berhasil, Scan Baru dan trigger langsung memulai scan baru tanpa
+pertanyaan. Selama status masih <i>Mengirim&hellip;</i>, tombol Scan Baru nonaktif dan trigger
+diabaikan sampai hasilnya keluar.</p>
 
 <h3>Daftar tag</h3>
 <p>Setiap baris pada daftar tag menampilkan:</p>
@@ -184,7 +233,10 @@ terbanyak, atau Kualitas terbaik.</p>
 
 <p>Sebelumnya, pesan kegagalan menampilkan balasan mentah dari server apa adanya &mdash; teks
 teknis, dan bisa sangat panjang. Sekarang pesan ini disederhanakan menjadi satu baris yang mudah
-dibaca:</p>
+dibaca, diawali jumlah tag yang belum terkirim &mdash; misalnya <i>"18 tag belum terkirim &mdash;
+Terjadi kesalahan sistem, silakan hubungi Tim WMS"</i> &mdash; dengan tombol <b>Kirim Ulang</b> di
+sebelahnya. Pesan ini hanya muncul selama tag tersebut masih ada di layar; begitu daftar
+dikosongkan, pesannya ikut hilang.</p>
 
 <table class="shotrow">
 <tr>
@@ -205,10 +257,38 @@ jelas dan berguna dibaca apa adanya.</li>
 
 <div class="note">
 Menyederhanakan pesan kode 500 memang sengaja menyembunyikan detail teknis dari layar &mdash;
-tapi detail itu <u>tidak hilang</u>. Setiap percobaan pengiriman (berhasil maupun gagal, RFID
-maupun barcode) tetap dicatat lengkap di <b>Pengaturan &rarr; Riwayat Log</b> (lihat Bab 12),
+tapi detail itu <u>tidak hilang</u>. Setiap percobaan pengiriman (berhasil maupun gagal &mdash; RFID,
+barcode, maupun penggantian RFID) tetap dicatat lengkap di <b>Pengaturan &rarr; Riwayat Log</b>,
 sehingga admin/Tim IT tetap bisa melihat penyebab teknis sebenarnya di balik pesan umum tersebut.
 </div>
+
+<h3>Riwayat Log &amp; Kirim Ulang</h3>
+<p><b>Pengaturan &rarr; Riwayat Log</b> menyimpan 30 percobaan pengiriman terakhir, yang terbaru
+di atas. Setiap entri menampilkan label jenis pengiriman (mis. <i>RFID &middot; WO &middot;
+Opname</i>, <i>Barcode &middot; WO</i>, <i>Penggantian</i>), status Terkirim/Gagal, waktu, dan
+jumlah tag/kode.</p>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/settings-log-history-dialog.png" width="160" height="267"><div class="cap">Daftar riwayat</div></td>
+<td><img src="screenshots/settings-log-history-detail.png" width="160" height="267"><div class="cap">Detail: Factory Code, RR Type, URL, hasil, data yang dikirim</div></td>
+<td><img src="screenshots/settings-log-resend-confirm.png" width="160" height="267"><div class="cap">Konfirmasi kirim ulang</div></td>
+</tr>
+</table>
+
+<ul>
+<li><b>Detail</b> &mdash; menampilkan Factory Code dan RR Type yang dipakai saat itu, alamat
+server tujuan, hasil lengkap dari server (atau pesan error teknisnya), dan data persis yang
+dikirim.</li>
+<li><b>Kirim ulang</b> &mdash; mengirim <u>data asli yang sama persis</u> ke alamat yang sama,
+bukan berdasarkan pengaturan yang sedang aktif sekarang. Sebelum mengirim selalu ada konfirmasi;
+untuk entri yang dulu <b>berhasil</b>, ada peringatan merah bahwa data bisa tercatat dua kali di
+server. Hasilnya dicatat sebagai entri baru bertanda <i>"Kirim ulang dari [waktu]"</i>.</li>
+<li>Tombol Kirim ulang tidak tersedia untuk penggantian RFID yang sudah berhasil (tag lama sudah
+diganti di server), maupun untuk entri lama dari versi aplikasi sebelumnya.</li>
+</ul>
+<p>Berguna misalnya setelah tag di layar sempat dibuang dengan <b>Buang &amp; scan baru</b>:
+datanya masih bisa dikirim ulang dari sini.</p>
 </div>
 
 <!-- ===================== 5. KUALITAS SINYAL ===================== -->
@@ -352,7 +432,9 @@ ada status Mengirim/Terkirim, dan tidak ada yang terkirim ke endpoint yang biasa
 terbaca sehingga tidak bisa di-scan</li>
 <li><b>Alasan</b> &mdash; dropdown dengan dua pilihan tetap: <b>Rusak</b> atau <b>Tidak
 Terbaca</b></li>
-<li><b>Kirim</b> &mdash; baru bisa ditekan setelah RFID Lama diisi. Jika gagal, form tetap
+<li><b>Kirim</b> &mdash; baru bisa ditekan setelah RFID Lama diisi, dan selama Factory Code
+(beserta ID-nya) sudah tersimpan di Pengaturan &mdash; jika belum, form menampilkan pesan untuk
+membuka Pengaturan dan memeriksa Base URL. Jika gagal, form tetap
 terbuka dengan pesan kegagalan (format sama seperti Bab 4) sehingga bisa langsung dicoba lagi
 tanpa perlu scan ulang. Jika berhasil, form tertutup otomatis dan daftar tag dikosongkan, siap
 untuk penggantian berikutnya.</li>
@@ -389,7 +471,7 @@ Belakang</b>, dua hal berubah:</p>
 <tr>
 <td><img src="screenshots/floating-bubble-home.png" width="160" height="267"><div class="cap">Diam, di atas layar utama HP</div></td>
 <td><img src="screenshots/floating-bubble-scanning.png" width="160" height="267"><div class="cap">Sedang scan, jumlah tag berjalan</div></td>
-<td><img src="screenshots/floating-bubble-over-chrome.png" width="160" height="267"><div class="cap">Mengambang di atas Chrome</div></td>
+<td><img src="screenshots/floating-bubble-over-chrome.png" width="160" height="267"><div class="cap">Di atas Chrome, hijau setelah terkirim</div></td>
 </tr>
 </table>
 
@@ -427,17 +509,27 @@ dibackup ke CSV karena setiap kode sudah langsung dikirim satu per satu ke serve
 <h2>11. Update Aplikasi Otomatis</h2>
 
 <p>Aplikasi secara otomatis memeriksa versi terbaru setiap kali dibuka, dan setiap kembali ke
-layar depan (paling cepat setiap 5 menit sekali). Jika tersedia versi baru, muncul kartu
-notifikasi di Layar Scan:</p>
+layar depan (paling cepat setiap 5 menit sekali). Jika tersedia versi baru, muncul banner tipis
+satu baris di Layar Scan:</p>
 
-<div class="shot">
-  <img src="screenshots/scan-quality-strong.png" width="190" height="317">
-  <div class="cap">Kartu "Update tersedia" muncul di bagian atas Layar Scan</div>
-</div>
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/scan-empty.png" width="160" height="267"><div class="cap">Banner "Update tersedia" di Layar Scan</div></td>
+<td><img src="screenshots/update-confirm-dialog.png" width="160" height="267"><div class="cap">Konfirmasi sebelum mengunduh</div></td>
+</tr>
+</table>
 
-<div class="step"><span class="n">1</span> Tekan <b>Update Sekarang</b> untuk mengunduh versi terbaru.</div>
+<div class="step"><span class="n">1</span> Tekan <b>Update</b>, lalu <b>Unduh update</b> pada konfirmasi yang muncul (<b>Batal</b> tidak mengubah apa pun &mdash; konfirmasi ini mencegah unduhan karena salah ketuk).</div>
 <div class="step"><span class="n">2</span> Setelah selesai diunduh, tekan <b>Pasang</b> &mdash; ini akan membuka pemasang aplikasi bawaan Android.</div>
 <div class="step"><span class="n">3</span> Khusus pemasangan pertama kali di sebuah perangkat, Android mungkin menampilkan layar izin <i>"Izinkan pemasangan dari aplikasi ini"</i> &mdash; cukup disetujui satu kali, bukan setiap update.</div>
+
+<div class="tip">
+Belum ingin update sekarang? Tekan <b>&#10005;</b> (Nanti) di ujung banner. Banner disembunyikan
+untuk versi tersebut sampai aplikasi ditutup lalu dibuka lagi, atau sampai ada versi yang lebih
+baru. Selama tersembunyi, muncul titik merah kecil di ikon Pengaturan &mdash; banner yang sama
+(tanpa &#10005;) ada di bagian paling atas Pengaturan, dan baris versi di paling bawah Pengaturan
+menulis <i>"Update tersedia: v&hellip;"</i>, sehingga update tetap bisa dimulai dari sana.
+</div>
 
 <p>Tidak perlu laptop, kabel data, atau transfer APK manual &mdash; semua dilakukan langsung dari
 handheld lewat internet.</p>
@@ -472,32 +564,45 @@ biasanya hanya perlu disentuh sekali oleh admin/IT saat konfigurasi awal sebuah 
   <img src="screenshots/settings-api-config.png" width="190" height="317">
 </div>
 <ul>
-<li><b>Base URL</b> &mdash; alamat server WMS tujuan</li>
+<li><b>Base URL</b> &mdash; alamat server WMS tujuan. Setiap kali diganti, daftar <b>RR Type</b>
+dan <b>Factory Code</b> otomatis diambil dari server tersebut: langsung saat dipilih dari daftar,
+atau sekitar 1 detik setelah selesai mengetik (hanya untuk alamat yang diawali <code>http://</code>
+atau <code>https://</code>). Di bawah kolom ini tampil statusnya: <i>Mengambil data&hellip;</i>,
+<i>Terhubung &middot; X RR Type, Y Factory</i> (hijau), atau <i>Gagal mengambil data dari server</i>
+(merah) dengan tombol <b>Coba lagi</b>. Jika gagal, daftar lama tetap dipakai dan diberi
+keterangan bahwa isinya mungkin dari server sebelumnya.</li>
 <li><b>Endpoint</b> &mdash; jalur API tujuan, biasanya tidak perlu diubah</li>
 <li><b>Reader ID</b> &mdash; hanya-baca, dibuat otomatis dari perangkat sehingga setiap handheld
 punya ID unik tanpa perlu diatur manual</li>
 <li><b>Antenna</b> &mdash; nomor antena yang dipakai</li>
 </ul>
 
-<h3>12.3 Tes &amp; Ambil Data, dan Register Configuration</h3>
+<div class="shot">
+  <img src="screenshots/settings-base-url-failed.png" width="190" height="317">
+  <div class="cap">Gagal mengambil data &mdash; daftar lama tetap dipakai, tekan Coba lagi</div>
+</div>
+
+<div class="note">
+Saat Base URL dipindah ke server lain, RR Type atau Factory Code yang sedang dipilih tetapi tidak
+ada di server baru otomatis dikosongkan &mdash; supaya kode dari server lama tidak ikut terkirim ke
+server baru. Daftar juga otomatis diambil saat Pengaturan dibuka jika daftarnya masih kosong (mis.
+setelah Reset atau pemasangan baru).
+</div>
+
+<h3>12.3 Register Configuration</h3>
 <div class="shot">
   <img src="screenshots/settings-test-connection-register.png" width="190" height="317">
 </div>
 <ul>
-<li><b>Tes &amp; Ambil Data</b> &mdash; mengecek apakah alamat server bisa dihubungi, sekaligus
-mengambil daftar terbaru untuk <b>RR Type</b> dan <b>Factory Code</b> langsung dari server</li>
-<li><b>Register Configuration</b> &mdash; Maker Name dan Initial Year tetap bisa diisi manual,
-tetapi <b>RR Type</b> dan <b>Factory Code</b> sekarang <u>hanya bisa dipilih dari daftar</u> hasil
-tombol Tes &amp; Ambil Data di atas &mdash; tidak bisa lagi diketik manual. Semua field ini selalu
-dikirim ke server terlepas dari Mode WO/Register yang dipilih.</li>
+<li><b>RR Type</b> dan <b>Factory Code</b> &mdash; <u>hanya bisa dipilih dari daftar</u> yang
+diambil otomatis dari server (Bab 12.2), tidak bisa diketik manual. <b>Factory Code wajib
+dipilih</b>: Simpan ditolak dengan pesan <i>"Factory Code belum dipilih, periksa Base URL"</i>
+jika masih kosong.</li>
+<li><b>Maker Name</b> &mdash; diisi manual</li>
+<li><b>Initial Year</b> &mdash; dipilih dari daftar tahun 2000 sampai tahun berjalan (otomatis
+mengikuti jam perangkat), atau diketik manual</li>
 </ul>
-
-<div class="note">
-Jika daftar RR Type atau Factory Code masih kosong (belum pernah ditekan sekali pun), tekan
-<b>Tes &amp; Ambil Data</b> terlebih dahulu sebelum memilih nilainya &mdash; daftar ini tersimpan
-di perangkat, jadi tidak perlu ditekan ulang setiap kali membuka Pengaturan, kecuali datanya
-berubah di server.
-</div>
+<p>Semua field ini selalu dikirim ke server terlepas dari Mode WO/Register yang dipilih.</p>
 
 <h3>12.4 Power</h3>
 <div class="shot">
@@ -511,8 +616,16 @@ otomatis disembunyikan saat Mode Barcode aktif.</p>
 <div class="shot">
   <img src="screenshots/settings-power-sound.png" width="190" height="317">
 </div>
-<p>Bunyi setiap kali tag/barcode berhasil terbaca, bisa dimatikan, lengkap dengan pengatur
-volume.</p>
+<p>Bunyi setiap kali tag/barcode berhasil terbaca, sekaligus <b>nada hasil kirim</b>
+(<i>"tit-tit"</i> = terkirim, tiga bunyi rendah = gagal &mdash; lihat Bab 3), bisa dimatikan,
+lengkap dengan pengatur volume.</p>
+
+<div class="note">
+Pada handheld yang punya motor getar, hasil kirim juga ditandai dengan getaran (1 kali = terkirim,
+3 kali = gagal), selalu aktif tanpa pengaturan tersendiri. Zebra MC33 tidak memiliki motor getar,
+dan motor getar Chainway C72 unit uji tidak bergetar secara fisik &mdash; di kedua perangkat ini
+hasil kirim dibedakan lewat nada.
+</div>
 
 <h3>12.6 Backup Lokal, Scan Latar Belakang &amp; Bahasa</h3>
 <div class="shot">
@@ -521,10 +634,11 @@ volume.</p>
 <p>Lihat Bab 9, Bab 10, dan Bab 13 untuk penjelasan masing-masing.</p>
 
 <h3>12.7 Riwayat Log</h3>
-<p>Tombol ini membuka daftar 10 percobaan pengiriman terakhir (RFID maupun Barcode), lengkap
-dengan detail teknis aslinya &mdash; lihat Bab 4 untuk penjelasan lengkapnya. Riwayat ini tetap
-tersimpan walau tombol <b>Reset</b> di bawah ditekan, karena ini catatan diagnostik, bukan bagian
-dari pengaturan.</p>
+<p>Tombol ini membuka daftar 30 percobaan pengiriman terakhir (RFID, Barcode, maupun penggantian
+RFID), lengkap dengan jenis pengiriman, pengaturan yang dipakai, detail teknis aslinya, dan tombol
+<b>Kirim ulang</b> &mdash; lihat Bab 4 untuk penjelasan lengkapnya. Riwayat ini tetap tersimpan walau
+aplikasi ditutup atau tombol <b>Reset</b> ditekan, karena ini catatan diagnostik, bukan bagian dari
+pengaturan.</p>
 
 <table class="shotrow">
 <tr>
@@ -537,12 +651,26 @@ dari pengaturan.</p>
 <div class="shot">
   <img src="screenshots/settings-lang-reset-save.png" width="190" height="317">
 </div>
+<p>Tombol <b>Reset</b> dan <b>Simpan</b> berada di bar bawah yang selalu terlihat, tanpa perlu
+menggeser layar. Versi aplikasi yang terpasang ditampilkan di paling bawah halaman.</p>
 <ul>
 <li><b>Reset</b> &mdash; mengembalikan semua pengaturan di atas ke nilai bawaan (tidak pernah
-mengubah pilihan jenis perangkat atau bahasa)</li>
-<li><b>Simpan</b> &mdash; memvalidasi lalu menyimpan seluruh perubahan; versi aplikasi yang
-terpasang ditampilkan tepat di bawah tombol ini</li>
+mengubah pilihan jenis perangkat atau bahasa), setelah konfirmasi <i>"Reset pengaturan?"</i>
+(<b>Batal</b> / <b>Reset</b> merah). Batal tidak mengubah apa pun.</li>
+<li><b>Simpan</b> &mdash; memvalidasi lalu menyimpan seluruh perubahan; tombol ini nonaktif
+(abu-abu) selama belum ada yang diubah.</li>
+<li><b>Perubahan belum disimpan</b> &mdash; jika keluar dari Pengaturan (panah kembali atau tombol
+back Android) padahal ada yang diubah, muncul pertanyaan <i>"Simpan perubahan?"</i>:
+<b>Simpan</b> (validasi tetap berlaku &mdash; jika gagal, tetap di Pengaturan dan kesalahannya
+ditampilkan), <b>Buang</b>, atau <b>Batal</b>. Jika tidak ada perubahan, langsung keluar.</li>
 </ul>
+
+<table class="shotrow">
+<tr>
+<td><img src="screenshots/settings-reset-confirm.png" width="160" height="267"><div class="cap">Konfirmasi Reset</div></td>
+<td><img src="screenshots/settings-unsaved-dialog.png" width="160" height="267"><div class="cap">Keluar tanpa menyimpan</div></td>
+</tr>
+</table>
 </div>
 
 <!-- ===================== 13. BAHASA ===================== -->
@@ -587,8 +715,25 @@ tim IT untuk memasang ulang aplikasi ke versi resmi.</td>
 <tr>
 <td>Unduhan update terhenti/timeout</td>
 <td>Aplikasi mengunduh file update (beberapa MB) lewat jaringan handheld; pada WiFi gudang yang
-lambat, percobaan pertama kadang gagal. Tekan <b>Update Sekarang</b> sekali lagi untuk mencoba
+lambat, percobaan pertama kadang gagal. Tekan <b>Coba lagi</b> pada banner update untuk mencoba
 ulang.</td>
+</tr>
+<tr>
+<td>Pesan gagal kirim <i>"Gate not found for the given reader_id and antenna"</i></td>
+<td>Server WMS belum mengenali handheld ini: kombinasi <b>Reader ID</b> (lihat Pengaturan &rarr;
+Konfigurasi API) dan <b>Antenna</b> belum didaftarkan sebagai Gate. Minta admin WMS mendaftarkannya;
+setelah itu tekan <b>Kirim Ulang</b>.</td>
+</tr>
+<tr>
+<td>Di bawah Base URL muncul <i>"Gagal mengambil data dari server"</i></td>
+<td>Handheld tidak bisa menjangkau server: periksa koneksi WiFi (matikan lalu nyalakan lagi WiFi
+jika status tersambung tapi tidak ada internet) dan penulisan Base URL, lalu tekan <b>Coba
+lagi</b>.</td>
+</tr>
+<tr>
+<td>Simpan Pengaturan ditolak: <i>"Factory Code belum dipilih, periksa Base URL"</i></td>
+<td>Factory Code wajib dipilih. Pastikan status di bawah Base URL <i>Terhubung</i>, lalu pilih
+Factory Code dari daftar.</td>
 </tr>
 <tr>
 <td>Pesan gagal kirim hanya menampilkan "Terjadi kesalahan sistem, silakan hubungi Tim WMS" tanpa

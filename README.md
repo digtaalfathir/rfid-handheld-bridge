@@ -95,6 +95,14 @@ The main screen, and the only one an operator needs day to day.
   replacement) it's cleared, so Retry always has something to send
 - **Total Unique** counts every collected tag, not just the ones the search box currently shows
 
+<table>
+<tr>
+<td><img src="docs/screenshots/scan-sent.png" alt="Summary line showing Sent after a scan" /><br/><sub>✓ Sent in the summary line</sub></td>
+<td><img src="docs/screenshots/scan-config-chips-replacement.png" alt="Config chips with the orange Replacement chip" /><br/><sub>Config chips, Replacement active</sub></td>
+<td><img src="docs/screenshots/scan-unsent-dialog.png" alt="Unsent tags confirmation dialog" /><br/><sub>Unsent tags: Send first / Discard / Cancel</sub></td>
+</tr>
+</table>
+
 - **Tag list** — sorted and searchable; each row shows the EPC, read count (`R:`), a **Quality**
   label, and a **NEW** / **EXISTING** badge (whether this tag was already in the list before the
   current scan session started). Tap the copy icon on a row to copy its EPC.
@@ -116,6 +124,13 @@ turned into one plain-language line instead:
 - Anything that isn't a parsed HTTP response at all (a network/timeout exception, or a body that
   didn't parse) falls back to showing the raw text, in red.
 
+<table>
+<tr>
+<td><img src="docs/screenshots/send-error-system.png" alt="HTTP 500: generic system error in red" /><br/><sub>HTTP 500: generic message (red)</sub></td>
+<td><img src="docs/screenshots/send-error-message.png" alt="Other status: the server's own message in blue" /><br/><sub>Other status: server's message (blue)</sub></td>
+</tr>
+</table>
+
 Generalizing the 500 case intentionally throws away detail on screen — so nothing is lost, every
 send attempt (success or failure — RFID batch, barcode, or RFID replacement) is also written to a
 small on-device log: **Settings → Log History** shows the last 30 attempts, newest first. Each
@@ -135,6 +150,14 @@ entry shows:
   extra fields — see [Resends](#resends) for the backend. Not offered for a replacement that
   already succeeded (the old tag is already swapped out server-side, so it could only be
   rejected), nor for entries logged before this version (their payload was never stored)
+
+<table>
+<tr>
+<td><img src="docs/screenshots/settings-log-history-dialog.png" alt="Log History list with type badges and Resend buttons" /><br/><sub>Log History</sub></td>
+<td><img src="docs/screenshots/settings-log-history-detail.png" alt="Expanded log entry details" /><br/><sub>Details expanded</sub></td>
+<td><img src="docs/screenshots/settings-log-resend-confirm.png" alt="Resend confirmation with duplicate warning" /><br/><sub>Resend confirmation</sub></td>
+</tr>
+</table>
 
 Only the small per-entry summary is kept in SharedPreferences; each payload is stored as its own
 file in the app's private storage (`files/send_log/`), deleted when its entry drops off the
@@ -315,6 +338,13 @@ a slim one-line banner appears on the Scan screen:
 3. The very first time on a given device, Android may show its own "allow installs from this app"
    permission screen — a one-time approval per device, not per update
 
+<table>
+<tr>
+<td><img src="docs/screenshots/scan-empty.png" alt="Slim update banner on the Scan screen" /><br/><sub>Slim banner with Update and ✕</sub></td>
+<td><img src="docs/screenshots/update-confirm-dialog.png" alt="Download update confirmation" /><br/><sub>Confirm before downloading</sub></td>
+</tr>
+</table>
+
 **Later (✕)** hides the banner for that version until the app is reopened (fully closed and
 started again) or a newer version is released — it otherwise takes room from the tag list. While
 it's hidden, a small red dot on the Settings icon is the reminder — and points the way: the same
@@ -351,7 +381,12 @@ Every section, top to bottom, each with its own icon:
     every handheld in a fleet gets a unique, human-readable ID with zero per-device setup
   - **Antenna** — editable dropdown
 
-![API Configuration section](docs/screenshots/settings-api-config.png)
+<table>
+<tr>
+<td><img src="docs/screenshots/settings-api-config.png" alt="API Configuration with the Connected status under Base URL" /><br/><sub>Base URL: Connected</sub></td>
+<td><img src="docs/screenshots/settings-base-url-failed.png" alt="Base URL fetch failed with Try again" /><br/><sub>Base URL: failed, Try again</sub></td>
+</tr>
+</table>
 
 - **Register Configuration** — Maker Name and Initial Year are editable dropdowns that remember
   custom entries; **RR Type** and **Factory Code** are selection-only (no manual typing) and
@@ -411,7 +446,13 @@ physically buzz (Android runs the pattern, nothing is felt). That's why the tone
   leaves right away. Changes Settings makes on its own count too — e.g. switching Base URL clears
   an RR Type / Factory Code the new server doesn't have
 
-![Language, Reset/Save, and the version footer](docs/screenshots/settings-lang-reset-save.png)
+<table>
+<tr>
+<td><img src="docs/screenshots/settings-lang-reset-save.png" alt="Language, Log History, version line, pinned Reset/Save bar" /><br/><sub>Pinned Reset / Save bar</sub></td>
+<td><img src="docs/screenshots/settings-reset-confirm.png" alt="Reset confirmation dialog" /><br/><sub>Reset confirmation</sub></td>
+<td><img src="docs/screenshots/settings-unsaved-dialog.png" alt="Save changes dialog on leaving Settings" /><br/><sub>Unsaved changes on leaving</sub></td>
+</tr>
+</table>
 
 ## Language
 
@@ -449,7 +490,10 @@ string table, so nothing drifts out of sync between languages.
   test versionCode to trigger again.
 - **Update download times out** — the in-app updater downloads the APK itself (a few MB) over
   whatever network the handheld has; on slow warehouse WiFi the first attempt can occasionally
-  time out. Tapping Update Now again retries cleanly.
+  time out. Tapping Retry on the update banner (then confirming) retries cleanly.
+- **"Gate not found for the given reader_id and antenna" when sending** — the WMS server doesn't
+  know this handheld yet: its Reader ID (Settings → API Configuration) + Antenna aren't registered
+  as a Gate. Have a WMS admin register them, then tap Retry.
 - **Barcode mode on Zebra: trigger scans but nothing shows up in the app** — the scan engine
   decoded successfully but DataWedge routed the result to a different profile's default keystroke
   output, which a focus-less Compose screen silently swallows. The app now force-activates its own
