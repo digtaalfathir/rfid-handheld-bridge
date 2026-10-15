@@ -351,7 +351,18 @@ Every section, top to bottom, each with its own icon:
 
 ![End of Register Configuration and start of Power](docs/screenshots/settings-register-power.png)
 
-- **Sound** — beep on tag read, on/off, plus a volume slider when enabled
+- **Sound** — beep on tag read, on/off, plus a volume slider when enabled. The same switch and
+  volume also cover the **send-result tone**, so the operator knows the outcome without looking
+  at the screen: **sent** = a quick double beep (`TONE_PROP_ACK`), **failed** = a low beep three
+  times (`TONE_PROP_NACK` ×3). It plays for every kind of send — RFID batch, barcode, RFID
+  replacement, and a resend from Log History — including while the app is in the background with
+  Background Scanning on
+
+**Send-result vibration** mirrors the tone — 1 short buzz = sent, 3 buzzes = failed — and is
+always on (no separate switch) on handhelds that have a vibration motor. The current fleet
+doesn't: the **Zebra MC33 has no motor**, and the **Chainway C72** reports one that doesn't
+physically buzz (Android runs the pattern, nothing is felt). That's why the tone carries the same
+1-vs-3 pattern — on these units it's the cue.
 
 ![Power slider and Sound settings](docs/screenshots/settings-power-sound.png)
 

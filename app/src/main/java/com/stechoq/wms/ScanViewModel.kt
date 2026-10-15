@@ -466,14 +466,34 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Recreates the ToneGenerator only when the configured volume actually changes — not per
      * beep, which would reintroduce the exact scan-loop-style jank this app has already fixed
      * once before (constructing a ToneGenerator opens an audio track, not a cheap call). */
-    private fun playBeep() {
+    private fun playBeep() = playTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+
+    // Synchronized: tag-read beeps come from the reader's thread, send-result tones from IO.
+    @Synchronized
+    private fun playTone(tone: Int, durationMs: Int = -1) {
         val volume = _config.value.soundVolume.coerceIn(ScanConfig.MIN_VOLUME, ScanConfig.MAX_VOLUME)
         if (toneGenerator == null || toneGeneratorVolume != volume) {
             toneGenerator?.release()
             toneGeneratorVolume = volume
             toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, volume)
         }
-        toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+        toneGenerator?.startTone(tone, durationMs)
+    }
+
+    /** Send result the operator can tell without looking: the tone follows the Sound setting
+     * (on/off + volume); vibration is always on where the handheld has a motor. Runs whether or
+     * not the app is on screen — with Background Scanning on, the floating bubble's foreground
+     * service keeps both allowed. */
+    private fun signalSendResult(success: Boolean) {
+        SendFeedback.vibrate(getApplication(), success)
+        if (!_config.value.soundEnabled) return
+        val pattern = SendFeedback.toneFor(success)
+        viewModelScope.launch(Dispatchers.Default) {
+            repeat(pattern.repeats) { i ->
+                if (i > 0) delay(pattern.gapMs)
+                playTone(pattern.tone, pattern.durationMs)
+            }
+        }
     }
 
     private fun stopScanAndSend() {
@@ -611,9 +631,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** Every send (scan batch, barcode, replacement, or a resend from Log History) is logged with
-     * its type, the config it went out under, and the exact body — so it can be shown and resent
-     * later regardless of what Settings say by then. */
+    /** Every send (scan batch, barcode, replacement, or a resend from Log History) ends here: it's
+     * logged with its type, the config it went out under, and the exact body — so it can be shown
+     * and resent later regardless of what Settings say by then — and its result is signalled
+     * (vibration + tone, see [signalSendResult]). */
     private fun logSend(
         context: SendContext,
         request: OutgoingRequest,
@@ -621,6 +642,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         okDetail: String,
         resendOf: Long? = null
     ) {
+        signalSendResult(error == null)
         configRepo.appendSendLog(
             SendLogEntry(
                 timestamp = System.currentTimeMillis(),
