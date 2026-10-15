@@ -53,8 +53,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -69,6 +67,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -109,9 +110,20 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(strings.appTitle, fontWeight = FontWeight.SemiBold) },
-                actions = {
+            // A 48dp bar rather than TopAppBar's fixed 64dp: on a 480×800 handheld every dp up
+            // here comes out of the tag list. Distinct accent color is the main visual cue that
+            // Barcode mode is active, since the two modes otherwise share the same screen chrome.
+            Surface(color = if (isBarcodeMode) BarcodeAccent.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(48.dp).padding(start = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        strings.appTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
                     Box {
                         IconButton(onClick = onOpenSettings) {
                             Icon(Icons.Filled.Settings, contentDescription = strings.settingsDescription)
@@ -127,25 +139,18 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                             )
                         }
                     }
-                },
-                // Distinct accent color is the main visual cue that Barcode mode is active,
-                // since the two modes otherwise share the same screen chrome.
-                colors = if (isBarcodeMode) {
-                    TopAppBarDefaults.topAppBarColors(containerColor = BarcodeAccent.copy(alpha = 0.12f))
-                } else {
-                    TopAppBarDefaults.topAppBarColors()
                 }
-            )
+            }
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp)
         ) {
             ConfigChipsRow(config = config, onClick = onOpenSettings)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
 
             if (state.updateStatus !is UpdateStatus.Idle && !state.updateBannerHidden) {
                 UpdateBanner(
@@ -154,7 +159,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     onInstall = { viewModel.installUpdate() },
                     onLater = { viewModel.dismissUpdateBanner() }
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
             }
 
             if (isBarcodeMode) {
@@ -170,7 +175,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     onRetrySend = { viewModel.retrySend() }
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
 
                 SearchSortRow(
                     query = state.searchQuery,
@@ -179,7 +184,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     onSortChange = viewModel::setSortOption
                 )
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
 
                 if (state.tags.isEmpty()) {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -194,7 +199,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     LaunchedEffect(state.tags.firstOrNull()?.epc) {
                         if (state.tags.isNotEmpty()) listState.animateScrollToItem(0)
                     }
-                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(state.tags, key = { it.epc }) { tag ->
                             TagRow(tag) { epc ->
                                 clipboard.setText(AnnotatedString(epc))
@@ -332,20 +337,14 @@ private fun SummaryCard(
     onRetrySend: () -> Unit
 ) {
     val strings = LocalStrings.current
-    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth()) {
-                StatItem(strings.totalDetected, state.totalReads.toString(), Modifier.weight(1f))
-                StatItem(strings.totalUnique, state.uniqueCount.toString(), Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "${strings.lastScanPrefix}${formatTime(state.lastScanTime)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    // Kept to one small summary line + the scan button: on a 480×800 handheld the old card (big
+    // numbers, separate "last scan" line, a status line under the button) left room for barely
+    // one tag row.
+    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            SummaryLine(state)
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(6.dp))
 
             when {
                 state.scanning -> Button(
@@ -405,13 +404,76 @@ private fun SummaryCard(
                 }
             }
 
-            // A send error is about tags still on screen — never shown once there are none left.
-            val staleError = state.sendStatus is SendStatus.Error && state.uniqueCount == 0
-            AnimatedVisibility(visible = state.sendStatus !is SendStatus.Idle && !staleError) {
+            // Only a failure gets its own line (message + Retry) — Sending/Sent ride in the summary
+            // line above. A send error is about tags still on screen — never shown once there are
+            // none left.
+            val error = state.sendStatus as? SendStatus.Error
+            AnimatedVisibility(visible = error != null && state.uniqueCount > 0) {
                 Column {
-                    Spacer(Modifier.height(8.dp))
-                    SendStatusBanner(state.sendStatus, onRetrySend)
+                    Spacer(Modifier.height(6.dp))
+                    if (error != null) SendStatusBanner(error, onRetrySend)
                 }
+            }
+        }
+    }
+}
+
+/** "12 unik · 340 terdeteksi" on the left; on the right the last scan time, with the send
+ * status in front of it while there is one (spinner = sending, ✓ = sent, ✗ = failed). */
+@Composable
+private fun SummaryLine(state: ScanUiState) {
+    val strings = LocalStrings.current
+    // The counts are what an operator glances at, so they're set larger than their labels — the
+    // labels stay small so the whole line still fits one row on a 320dp-wide screen.
+    val numberStyle = SpanStyle(
+        fontWeight = FontWeight.Bold,
+        fontSize = MaterialTheme.typography.titleMedium.fontSize,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    val counts = buildAnnotatedString {
+        withStyle(numberStyle) { append(state.uniqueCount.toString()) }
+        append(" ${strings.summaryUnique} · ")
+        withStyle(numberStyle) { append(state.totalReads.toString()) }
+        append(" ${strings.summaryDetected}")
+    }
+    Row(modifier = Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            counts,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        val time = state.lastScanTime?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it)) }
+        when (state.sendStatus) {
+            SendStatus.Sending -> {
+                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(4.dp))
+                Text(strings.sending, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            }
+            is SendStatus.Success -> Text(
+                listOfNotNull("✓ ${strings.sentPrefix}", time).joinToString(" "),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = SuccessGreen,
+                maxLines = 1
+            )
+            is SendStatus.Error -> Text(
+                listOfNotNull("✗", time).joinToString(" "),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = ErrorRed,
+                maxLines = 1
+            )
+            SendStatus.Idle -> if (time != null) {
+                Text(
+                    "${strings.lastScanPrefix}$time",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -564,33 +626,20 @@ private fun BannerLaterButton(onLater: () -> Unit) {
 }
 
 @Composable
-private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
+private fun SendStatusBanner(status: SendStatus.Error, onRetry: () -> Unit) {
     val strings = LocalStrings.current
-    when (status) {
-        is SendStatus.Sending -> Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(6.dp))
-            Text(strings.sending, style = MaterialTheme.typography.bodySmall)
-        }
-        is SendStatus.Success -> Text(
-            strings.sentSuccess(status.count),
-            color = SuccessGreen,
-            style = MaterialTheme.typography.bodySmall
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val display = formatSendError(status.message, strings.systemErrorGeneric)
+        Text(
+            strings.unsentSendError(status.unsentCount, display.message),
+            color = if (display.isSystemError) ErrorRed else BluePrimary,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f)
         )
-        is SendStatus.Error -> Row(verticalAlignment = Alignment.CenterVertically) {
-            val display = formatSendError(status.message, strings.systemErrorGeneric)
-            Text(
-                strings.unsentSendError(status.unsentCount, display.message),
-                color = if (display.isSystemError) ErrorRed else BluePrimary,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(6.dp))
-            OutlinedButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                Text(strings.retrySend, style = MaterialTheme.typography.labelMedium)
-            }
+        Spacer(Modifier.width(6.dp))
+        OutlinedButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+            Text(strings.retrySend, style = MaterialTheme.typography.labelMedium)
         }
-        SendStatus.Idle -> {}
     }
 }
 
@@ -711,23 +760,9 @@ private fun ReplacementDialog(
     )
 }
 
-@Composable
-private fun StatItem(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    valueColor: Color = Color.Unspecified
-) {
-    Column(modifier) {
-        Text(
-            value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = valueColor
-        )
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
+// Search field and sort button share this height — shorter than a standard 48dp row, since it
+// sits between the scan button and the tag list on a small screen.
+private val SEARCH_ROW_HEIGHT = 36.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -743,7 +778,12 @@ private fun SearchSortRow(
         Spacer(Modifier.width(4.dp))
         Box {
             var expanded by remember { mutableStateOf(false) }
-            IconButton(onClick = { expanded = true }) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(SEARCH_ROW_HEIGHT)
+                    .clickable(onClickLabel = strings.sortDescription) { expanded = true }
+            ) {
                 Icon(Icons.Filled.Sort, contentDescription = strings.sortDescription)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -762,8 +802,8 @@ private fun SearchSortRow(
 private fun CompactSearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     Surface(
-        modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.height(SEARCH_ROW_HEIGHT),
+        shape = RoundedCornerShape(SEARCH_ROW_HEIGHT / 2),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
@@ -815,7 +855,8 @@ private fun TagRow(tag: TagRecord, onCopy: (String) -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                // Tighter than a default card row so five fit on a 480×800 screen; same content.
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {

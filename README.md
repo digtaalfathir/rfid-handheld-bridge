@@ -62,8 +62,12 @@ The main screen, and the only one an operator needs day to day.
   Type or Factory Code shows as a red *"RR Type –"* / *"Factory Code –"* chip. The row scrolls
   sideways when it doesn't fit, updates as soon as Settings is saved, and tapping it opens
   Settings
-- **Summary card** — total tags detected (raw reads) and total unique tags this session, plus the
-  time of the last completed scan
+- **Summary card** — kept compact so the tag list gets the room: one small line with the unique
+  tag count, total reads (raw detections), and on the right the time of the last scan — preceded
+  by the send status while there is one (*Sending…*, green *✓ Sent*, red *✗*) — then the scan
+  button(s) (48dp tall) right below. The title bar is 48dp and the search/sort row 36dp for the
+  same reason: on a 480×800 handheld (Zebra MC33) at least 5 tag rows are visible without
+  scrolling, 4 with the update banner showing
 - **Start Scan / Stop Scan** — tap, or hold the physical trigger; releasing the trigger stops the
   scan the same as tapping Stop
 - **New Scan vs Continue** — once a session has tags, the button row splits: **New Scan** clears
@@ -82,9 +86,9 @@ The main screen, and the only one an operator needs day to day.
   With Background Scanning on and the app not on screen, the trigger is ignored in that failed
   state (there's no screen to ask on) — the floating bubble stays red until the operator opens
   the app and chooses
-- **Send status** — after a scan stops, the collected tags post to your API automatically; a
-  banner shows Sending → Sent (n tags) or a Retry button (*Kirim Ulang* in Indonesian) on
-  failure. On failure, the banner leads with how many tags didn't make it, then a plain-language
+- **Send status** — after a scan stops, the collected tags post to your API automatically; the
+  summary line shows Sending → ✓ Sent, and on failure a line below the scan button adds a Retry
+  button (*Kirim Ulang* in Indonesian). That failure line leads with how many tags didn't make it, then a plain-language
   message rather than the raw server response — e.g. *"16 tags not sent — System error, please
   contact WMS Team"*; see [Send errors & log history](#send-errors--log-history). The error banner
   is only ever about tags still on screen: once the list is emptied (New Scan, discard,

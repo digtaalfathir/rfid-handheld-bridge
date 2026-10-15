@@ -28,8 +28,8 @@ data class AppStrings(
     val appTitle: String,
     val settingsDescription: String,
     val configChipsOpenSettings: String,
-    val totalDetected: String,
-    val totalUnique: String,
+    val summaryDetected: String,
+    val summaryUnique: String,
     val lastScanPrefix: String,
     val stopScan: String,
     val startScan: String,
@@ -180,8 +180,6 @@ data class AppStrings(
     val errorFactoryIdMissing: String,
     val errorPowerRange: String
 ) {
-    fun sentSuccess(count: Int): String = "$sentPrefix ($count $tagWord)"
-
     /** e.g. "Versi v1.5.15 akan diunduh. …" — the version is left out when not known (a retry). */
     fun updateConfirmMessage(version: String?): String =
         listOfNotNull(version?.let { "$updateConfirmVersionPrefix$it." }, updateConfirmBody).joinToString(" ")
@@ -266,9 +264,9 @@ val EnglishStrings = AppStrings(
     appTitle = "WMS RFID Suite",
     settingsDescription = "Settings",
     configChipsOpenSettings = "Open Settings",
-    totalDetected = "Total Detected",
-    totalUnique = "Total Unique",
-    lastScanPrefix = "Last scan: ",
+    summaryDetected = "detected",
+    summaryUnique = "unique",
+    lastScanPrefix = "Last ",
     stopScan = "Stop Scan",
     startScan = "Start Scan",
     scanNew = "New Scan",
@@ -426,9 +424,9 @@ val IndonesianStrings = AppStrings(
     appTitle = "WMS RFID Suite",
     settingsDescription = "Pengaturan",
     configChipsOpenSettings = "Buka Pengaturan",
-    totalDetected = "Total Terdeteksi",
-    totalUnique = "Total Unik",
-    lastScanPrefix = "Scan terakhir: ",
+    summaryDetected = "terdeteksi",
+    summaryUnique = "unik",
+    lastScanPrefix = "Terakhir ",
     stopScan = "Stop Scan",
     startScan = "Mulai Scan",
     scanNew = "Scan Baru",
