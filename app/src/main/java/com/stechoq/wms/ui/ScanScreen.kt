@@ -313,7 +313,7 @@ private fun SummaryCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth()) {
                 StatItem(strings.totalDetected, state.totalReads.toString(), Modifier.weight(1f))
-                StatItem(strings.totalUnique, state.tags.size.toString(), Modifier.weight(1f))
+                StatItem(strings.totalUnique, state.uniqueCount.toString(), Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
             Text(
@@ -335,7 +335,7 @@ private fun SummaryCard(
                     Text(strings.stopScan)
                 }
 
-                state.tags.isEmpty() -> Button(
+                state.uniqueCount == 0 -> Button(
                     onClick = onToggleScan,
                     enabled = state.readerConnected,
                     modifier = Modifier.fillMaxWidth().height(48.dp)
@@ -382,7 +382,9 @@ private fun SummaryCard(
                 }
             }
 
-            AnimatedVisibility(visible = state.sendStatus !is SendStatus.Idle) {
+            // A send error is about tags still on screen — never shown once there are none left.
+            val staleError = state.sendStatus is SendStatus.Error && state.uniqueCount == 0
+            AnimatedVisibility(visible = state.sendStatus !is SendStatus.Idle && !staleError) {
                 Column {
                     Spacer(Modifier.height(8.dp))
                     SendStatusBanner(state.sendStatus, onRetrySend)
@@ -463,14 +465,14 @@ private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
         is SendStatus.Error -> Row(verticalAlignment = Alignment.CenterVertically) {
             val display = formatSendError(status.message, strings.systemErrorGeneric)
             Text(
-                display.message,
+                strings.unsentSendError(status.unsentCount, display.message),
                 color = if (display.isSystemError) ErrorRed else BluePrimary,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(6.dp))
             OutlinedButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                Text(strings.retry, style = MaterialTheme.typography.labelMedium)
+                Text(strings.retrySend, style = MaterialTheme.typography.labelMedium)
             }
         }
         SendStatus.Idle -> {}

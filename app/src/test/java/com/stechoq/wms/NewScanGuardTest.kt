@@ -7,7 +7,7 @@ class NewScanGuardTest {
 
     @Test
     fun startsRightAwayWhenNothingIsOnScreen() {
-        assertEquals(NewScanDecision.START, newScanDecision(SendStatus.Error("HTTP 500"), tagCount = 0))
+        assertEquals(NewScanDecision.START, newScanDecision(SendStatus.Error("HTTP 500", unsentCount = 0), tagCount = 0))
         assertEquals(NewScanDecision.START, newScanDecision(SendStatus.Idle, tagCount = 0))
     }
 
@@ -19,7 +19,7 @@ class NewScanGuardTest {
     @Test
     fun asksBeforeDiscardingAfterAnyFailure() {
         listOf("timeout", "Unable to resolve host", "HTTP 500 {}", "HTTP 422 {\"message\":\"x\"}").forEach {
-            assertEquals(NewScanDecision.CONFIRM_DISCARD, newScanDecision(SendStatus.Error(it), tagCount = 5))
+            assertEquals(NewScanDecision.CONFIRM_DISCARD, newScanDecision(SendStatus.Error(it, unsentCount = 5), tagCount = 5))
         }
     }
 

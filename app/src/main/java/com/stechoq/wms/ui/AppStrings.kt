@@ -40,6 +40,8 @@ data class AppStrings(
     val tagWord: String,
     val systemErrorGeneric: String,
     val retry: String,
+    val retrySend: String,
+    val notSentLabel: String,
     val unsentTagsTitle: String,
     val unsentTagsMessagePrefix: String,
     val unsentTagsMessageSuffix: String,
@@ -169,6 +171,9 @@ data class AppStrings(
 ) {
     fun sentSuccess(count: Int): String = "$sentPrefix ($count $tagWord)"
 
+    /** e.g. "16 tag belum terkirim — Terjadi kesalahan sistem, silakan hubungi Tim WMS". */
+    fun unsentSendError(count: Int, reason: String): String = "$count $tagWord $notSentLabel — $reason"
+
     fun dropdownFetchConnected(rrTypeCount: Int, factoryCount: Int): String =
         "$dropdownFetchConnectedPrefix · $rrTypeCount RR Type, $factoryCount Factory"
 
@@ -258,6 +263,8 @@ val EnglishStrings = AppStrings(
     tagWord = "tags",
     systemErrorGeneric = "System error, please contact WMS Team",
     retry = "Retry",
+    retrySend = "Retry",
+    notSentLabel = "not sent",
     unsentTagsTitle = "Unsent tags",
     unsentTagsMessagePrefix = "There are ",
     unsentTagsMessageSuffix = " tags that haven't been sent to the server yet. Send them first, or discard them and start a new scan?",
@@ -404,7 +411,10 @@ val IndonesianStrings = AppStrings(
     sentPrefix = "Terkirim",
     tagWord = "tag",
     systemErrorGeneric = "Terjadi kesalahan sistem, silakan hubungi Tim WMS",
-    retry = "Retry",
+    // Update-download retry (banner) — the send banner's button uses retrySend below.
+    retry = "Coba lagi",
+    retrySend = "Kirim Ulang",
+    notSentLabel = "belum terkirim",
     unsentTagsTitle = "Tag belum terkirim",
     unsentTagsMessagePrefix = "Ada ",
     unsentTagsMessageSuffix = " tag yang belum terkirim ke server. Kirim dulu, atau buang dan mulai scan baru?",

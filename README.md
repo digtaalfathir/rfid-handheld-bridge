@@ -75,9 +75,13 @@ The main screen, and the only one an operator needs day to day.
   state (there's no screen to ask on) — the floating bubble stays red until the operator opens
   the app and chooses
 - **Send status** — after a scan stops, the collected tags post to your API automatically; a
-  banner shows Sending → Sent (n tags) or a Retry button on failure. On failure, the banner shows
-  a plain-language message rather than the raw server response — see
-  [Send errors & log history](#send-errors--log-history)
+  banner shows Sending → Sent (n tags) or a Retry button (*Kirim Ulang* in Indonesian) on
+  failure. On failure, the banner leads with how many tags didn't make it, then a plain-language
+  message rather than the raw server response — e.g. *"16 tags not sent — System error, please
+  contact WMS Team"*; see [Send errors & log history](#send-errors--log-history). The error banner
+  is only ever about tags still on screen: once the list is emptied (New Scan, discard,
+  replacement) it's cleared, so Retry always has something to send
+- **Total Unique** counts every collected tag, not just the ones the search box currently shows
 
 - **Tag list** — sorted and searchable; each row shows the EPC, read count (`R:`), a **Quality**
   label, and a **NEW** / **EXISTING** badge (whether this tag was already in the list before the

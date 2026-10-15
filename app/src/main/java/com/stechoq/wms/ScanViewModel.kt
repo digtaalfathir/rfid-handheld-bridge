@@ -76,7 +76,8 @@ sealed class SendStatus {
     // Raw, unlocalized detail (HTTP status + body, or an exception message) — the UI layer turns
     // this into a display message via formatSendError(), same as every other localized string
     // here coming from AppStrings rather than the ViewModel.
-    data class Error(val message: String) : SendStatus()
+    // [unsentCount]: how many tags that failed send carried — shown in the error banner.
+    data class Error(val message: String, val unsentCount: Int) : SendStatus()
 }
 
 /** State for the "replace a damaged tag" modal — shown mid-scan (Register mode + Replacement
@@ -116,6 +117,8 @@ data class ScanUiState(
     val scanning: Boolean = false,
     val tags: List<TagRecord> = emptyList(),
     val totalReads: Int = 0,
+    // Every collected tag, regardless of the search filter — [tags] is what's visible after it.
+    val uniqueCount: Int = 0,
     val lastScanTime: Long? = null,
     val sendStatus: SendStatus = SendStatus.Idle,
     val scanStartError: String? = null,
@@ -279,22 +282,26 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
         val s = _uiState.value
         if (s.scanning) return
-        if (s.tags.isEmpty()) toggleScan() else requestNewScan(fromTrigger = true)
+        if (collectedTagCount() == 0) toggleScan() else requestNewScan(fromTrigger = true)
     }
+
+    // Not uiState.tags — that's only what the search filter currently shows.
+    private fun collectedTagCount(): Int = synchronized(tagMap) { tagMap.size }
 
     /** New Scan button / trigger with tags present: starts fresh unless the tags on screen were
      * never delivered — then the operator decides (send first, or discard) via the confirmation
      * dialog. While a send is still in flight the request is ignored until its result is known. */
     fun requestNewScan(fromTrigger: Boolean = false) {
         val s = _uiState.value
-        when (newScanDecision(s.sendStatus, s.tags.size)) {
+        val count = collectedTagCount()
+        when (newScanDecision(s.sendStatus, count)) {
             NewScanDecision.START -> startNewScan()
             NewScanDecision.IGNORE -> Unit
             // Backgrounded (Background Scanning on): there's no screen to show the dialog on, so
             // the trigger does nothing — the bubble already shows red for the failed send, and
             // the operator gets the choice once they open the app and press again.
             NewScanDecision.CONFIRM_DISCARD -> if (isAppVisible()) {
-                _uiState.update { it.copy(unsentTagsPrompt = UnsentTagsPrompt(s.tags.size, fromTrigger)) }
+                _uiState.update { it.copy(unsentTagsPrompt = UnsentTagsPrompt(count, fromTrigger)) }
             }
         }
     }
@@ -314,12 +321,20 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             startNewScan()
             return
         }
+        clearTags()
+    }
+
+    /** Every path that empties the tag list goes through here, so a failed-send banner (and its
+     * Retry, which has nothing left to resend) can never linger over an empty list — e.g. when
+     * New Scan cleared the tags but the reader then failed to start. */
+    private fun clearTags() {
         synchronized(tagMap) { tagMap.clear() }
         sessionBaselineEpcs = emptySet()
         publishTags()
-        // The failed-send banner (and its Retry) would otherwise linger over an empty list.
-        _uiState.update { it.copy(sendStatus = SendStatus.Idle) }
-        ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+        if (_uiState.value.sendStatus is SendStatus.Error) {
+            _uiState.update { it.copy(sendStatus = SendStatus.Idle) }
+            ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+        }
     }
 
     fun dismissUnsentTagsPrompt() {
@@ -375,9 +390,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             transitioning.set(false)
             return
         }
-        synchronized(tagMap) { tagMap.clear() }
-        sessionBaselineEpcs = emptySet()
-        publishTags()
+        clearTags()
         beginInventory()
     }
 
@@ -533,10 +546,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 SendContext.of(config, SendType.REPLACEMENT, request.url, 1), request, error,
                 "OK (replace ${prompt.newRfid})"
             )
-            if (error == null) {
-                synchronized(tagMap) { tagMap.clear() }
-                publishTags()
-            }
+            if (error == null) clearTags()
             _uiState.update {
                 it.copy(replacementPrompt = if (error == null) null else prompt.copy(submitting = false, error = error))
             }
@@ -547,8 +557,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Discards the scanned tag and closes the modal without submitting anything. */
     fun cancelReplacement() {
         _uiState.update { it.copy(replacementPrompt = null) }
-        synchronized(tagMap) { tagMap.clear() }
-        publishTags()
+        clearTags()
     }
 
     /** Local backup, independent of whether the API send below succeeds — best-effort, never
@@ -574,7 +583,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     fun retrySend() {
         if (_uiState.value.sendStatus !is SendStatus.Error) return
         val snapshot = synchronized(tagMap) { tagMap.values.toList() }
-        if (snapshot.isEmpty()) return
+        if (snapshot.isEmpty()) {
+            // Nothing left to resend — drop the stale error instead of a Retry that does nothing.
+            clearTags()
+            return
+        }
         _uiState.update { it.copy(sendStatus = SendStatus.Sending) }
         viewModelScope.launch(Dispatchers.IO) { sendSnapshot(snapshot) }
     }
@@ -584,7 +597,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         val request = api.tagsRequest(config, snapshot)
         val error = api.post(request)
         _uiState.update {
-            it.copy(sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error))
+            it.copy(
+                sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error, snapshot.size)
+            )
         }
         logSend(
             SendContext.of(config, SendType.RFID_BATCH, request.url, snapshot.size), request, error,
@@ -657,7 +672,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(
                 tags = applySortAndFilter(snapshot, it.sortOption, it.searchQuery),
-                totalReads = snapshot.sumOf { t -> t.readCount }
+                totalReads = snapshot.sumOf { t -> t.readCount },
+                uniqueCount = snapshot.size
             )
         }
     }
