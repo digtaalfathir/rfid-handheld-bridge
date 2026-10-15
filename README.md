@@ -293,12 +293,20 @@ is_new`.
 
 The app checks this repo's GitHub Releases for a newer version on every launch and every time it
 returns to the foreground (throttled to at most once every 5 minutes). If a newer release exists,
-a banner appears on the Scan screen:
+a slim one-line banner appears on the Scan screen:
 
-1. **Update available: vX.Y.Z** → tap **Update Now** to download
+1. **Update available: vX.Y.Z** → tap **Update** to download
 2. Once downloaded, tap **Install** — this hands off to Android's standard package installer
 3. The very first time on a given device, Android may show its own "allow installs from this app"
    permission screen — a one-time approval per device, not per update
+
+**Later (✕)** hides the banner for that version until the app is reopened (fully closed and
+started again) or a newer version is released — it otherwise takes room from the tag list. While
+it's hidden, a small red dot on the Settings icon is the reminder — and points the way: the same
+banner (without ✕) sits at the top of Settings, so the update can still be started from there
+without restarting the app. The version line at the very bottom of Settings also says so
+(*Version 1.1 · Update available: v1.5.15*). A re-check on resume never
+interrupts a download or an install already in progress.
 
 No laptop, no cable, no manual APK transfer — see [Releasing](#releasing-fully-automated) for how
 new versions get published in the first place.

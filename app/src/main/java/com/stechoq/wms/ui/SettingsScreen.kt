@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import com.stechoq.wms.BuildConfig
 import com.stechoq.wms.DropdownFetchState
 import com.stechoq.wms.ScanViewModel
+import com.stechoq.wms.UpdateStatus
 import com.stechoq.wms.data.AppLanguage
 import com.stechoq.wms.data.FactoryCodeOption
 import com.stechoq.wms.data.InputMode
@@ -119,6 +120,7 @@ fun SettingsScreen(
     val initialYearOptions = remember { viewModel.initialYearOptions() }
     var factoryCodeOptions by remember { mutableStateOf(viewModel.factoryCodeOptions()) }
     val fetchState by viewModel.dropdownFetch.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     // Set by a pick from the Base URL menu, so the effect below fetches right away instead of
     // waiting out the typing debounce.
     var skipDebounce by remember { mutableStateOf(false) }
@@ -230,6 +232,17 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            // Where the Scan screen's red dot on the Settings icon points: the update banner the
+            // operator put off with "Later" stays reachable here, at the top, without a restart.
+            if (uiState.updateStatus !is UpdateStatus.Idle) {
+                UpdateBanner(
+                    status = uiState.updateStatus,
+                    onDownload = { viewModel.downloadUpdate() },
+                    onInstall = { viewModel.installUpdate() }
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
             SectionCard(
                 title = strings.scanModeTitle,
                 icon = Icons.Filled.QrCodeScanner,
@@ -538,7 +551,12 @@ fun SettingsScreen(
             Spacer(Modifier.height(20.dp))
 
             Text(
-                "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
+                // e.g. "Versi 1.1 · Update tersedia: v1.5.15" — the banner at the top is where
+                // to start it; this just says so where the version is naturally looked up.
+                listOfNotNull(
+                    "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
+                    uiState.newerVersion?.let { "${strings.updateAvailablePrefix}$it" }
+                ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),

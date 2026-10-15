@@ -125,6 +125,10 @@ data class ScanUiState(
     val searchQuery: String = "",
     val sortOption: SortOption = SortOption.LAST_SEEN_DESC,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
+    val updateBannerHidden: Boolean = false,
+    // Newest release found on GitHub when it differs from this build — kept through
+    // download/install, unlike UpdateStatus.Available which those states replace.
+    val newerVersion: String? = null,
     val barcodeScans: List<BarcodeScanRecord> = emptyList(),
     val replacementPrompt: ReplacementPrompt? = null,
     // Non-null while the "unsent tags" confirmation is showing.
@@ -204,10 +208,34 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 null
             } ?: return@launch
             if (info.version.isNotBlank() && info.version != BuildConfig.VERSION_NAME) {
-                pendingUpdate = info
-                _uiState.update { it.copy(updateStatus = UpdateStatus.Available(info)) }
+                _uiState.update {
+                    // A re-check on resume mustn't knock an in-progress download/install back to
+                    // "Available".
+                    if (it.updateStatus is UpdateStatus.Downloading || it.updateStatus is UpdateStatus.ReadyToInstall) {
+                        it
+                    } else {
+                        pendingUpdate = info
+                        it.copy(
+                            updateStatus = UpdateStatus.Available(info),
+                            newerVersion = info.version,
+                            // Stays hidden only for the version "Later" was tapped on — a newer
+                            // release brings the banner back.
+                            updateBannerHidden = info.version == dismissedUpdateVersion
+                        )
+                    }
+                }
             }
         }
+    }
+
+    // In memory only, so a dismissed banner comes back once the app is reopened (process restart).
+    private var dismissedUpdateVersion: String? = null
+
+    /** "Later" (✕) on the update banner: hides it for this version until the app is reopened or
+     * a newer version is released. The Settings icon keeps a small dot meanwhile. */
+    fun dismissUpdateBanner() {
+        dismissedUpdateVersion = pendingUpdate?.version
+        _uiState.update { it.copy(updateBannerHidden = true) }
     }
 
     fun downloadUpdate() {

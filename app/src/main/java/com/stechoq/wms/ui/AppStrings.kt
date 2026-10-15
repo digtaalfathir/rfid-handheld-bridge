@@ -68,6 +68,7 @@ data class AppStrings(
     val updateReadyToInstall: String,
     val installUpdateButton: String,
     val updateErrorPrefix: String,
+    val updateLater: String,
 
     // Barcode mode
     val barcodeEmptyList: String,
@@ -291,11 +292,12 @@ val EnglishStrings = AppStrings(
     qualityMedium = "Medium",
     qualityWeak = "Weak",
     updateAvailablePrefix = "Update available: v",
-    updateNowButton = "Update Now",
+    updateNowButton = "Update",
     downloadingUpdate = "Downloading update...",
     updateReadyToInstall = "Update ready to install",
     installUpdateButton = "Install",
     updateErrorPrefix = "Update failed: ",
+    updateLater = "Later",
 
     barcodeEmptyList = "No barcodes scanned yet",
     barcodeHint = "Hold the trigger to scan a barcode",
@@ -446,11 +448,12 @@ val IndonesianStrings = AppStrings(
     qualityMedium = "Sedang",
     qualityWeak = "Lemah",
     updateAvailablePrefix = "Update tersedia: v",
-    updateNowButton = "Update Sekarang",
+    updateNowButton = "Update",
     downloadingUpdate = "Mengunduh update...",
     updateReadyToInstall = "Update siap dipasang",
     installUpdateButton = "Pasang",
     updateErrorPrefix = "Update gagal: ",
+    updateLater = "Nanti",
 
     barcodeEmptyList = "Belum ada barcode discan",
     barcodeHint = "Tahan trigger untuk scan barcode",

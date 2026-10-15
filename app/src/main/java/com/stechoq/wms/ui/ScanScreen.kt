@@ -3,7 +3,10 @@ package com.stechoq.wms.ui
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +25,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -105,8 +109,20 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
             TopAppBar(
                 title = { Text(strings.appTitle, fontWeight = FontWeight.SemiBold) },
                 actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = strings.settingsDescription)
+                    Box {
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = strings.settingsDescription)
+                        }
+                        // The update banner was put off with "Later" — a small reminder it's still there.
+                        if (state.updateBannerHidden && state.updateStatus !is UpdateStatus.Idle) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 10.dp, end = 10.dp)
+                                    .size(8.dp)
+                                    .background(ErrorRed, CircleShape)
+                            )
+                        }
                     }
                 },
                 // Distinct accent color is the main visual cue that Barcode mode is active,
@@ -125,13 +141,14 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            if (state.updateStatus !is UpdateStatus.Idle) {
+            if (state.updateStatus !is UpdateStatus.Idle && !state.updateBannerHidden) {
                 UpdateBanner(
                     status = state.updateStatus,
                     onDownload = { viewModel.downloadUpdate() },
-                    onInstall = { viewModel.installUpdate() }
+                    onInstall = { viewModel.installUpdate() },
+                    onLater = { viewModel.dismissUpdateBanner() }
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
             }
 
             if (isBarcodeMode) {
@@ -394,57 +411,78 @@ private fun SummaryCard(
     }
 }
 
+// Single slim row (about half the old card's height) — it shares the screen with the tag list.
+private val UPDATE_BANNER_HEIGHT = 32.dp
+
 @Composable
-private fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstall: () -> Unit) {
+internal fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstall: () -> Unit, onLater: (() -> Unit)? = null) {
     val strings = LocalStrings.current
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().height(UPDATE_BANNER_HEIGHT).padding(start = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val slimButtonPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
             when (status) {
                 is UpdateStatus.Available -> {
-                    Text(
-                        "${strings.updateAvailablePrefix}${status.info.version}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                        Text(strings.updateNowButton, style = MaterialTheme.typography.labelMedium)
+                    BannerText("${strings.updateAvailablePrefix}${status.info.version}")
+                    TextButton(onClick = onDownload, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
+                        Text(strings.updateNowButton, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     }
+                    onLater?.let { BannerLaterButton(it) }
                 }
                 UpdateStatus.Downloading -> {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text(strings.downloadingUpdate, style = MaterialTheme.typography.bodyMedium)
+                    BannerText(strings.downloadingUpdate)
                 }
                 is UpdateStatus.ReadyToInstall -> {
-                    Text(
-                        strings.updateReadyToInstall,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onInstall, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                        Text(strings.installUpdateButton, style = MaterialTheme.typography.labelMedium)
+                    BannerText(strings.updateReadyToInstall)
+                    TextButton(onClick = onInstall, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
+                        Text(strings.installUpdateButton, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     }
+                    Spacer(Modifier.width(4.dp))
                 }
                 is UpdateStatus.Error -> {
-                    Text(
-                        "${strings.updateErrorPrefix}${status.message}",
-                        color = ErrorRed,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                    BannerText("${strings.updateErrorPrefix}${status.message}", color = ErrorRed)
+                    TextButton(onClick = onDownload, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
                         Text(strings.retry, style = MaterialTheme.typography.labelMedium)
                     }
+                    onLater?.let { BannerLaterButton(it) }
                 }
                 UpdateStatus.Idle -> {}
             }
         }
+    }
+}
+
+@Composable
+private fun RowScope.BannerText(text: String, color: Color = Color.Unspecified) {
+    Text(
+        text,
+        color = color,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f)
+    )
+}
+
+/** "Later" (✕): hides the banner for this version — see ScanViewModel.dismissUpdateBanner. */
+@Composable
+private fun BannerLaterButton(onLater: () -> Unit) {
+    val strings = LocalStrings.current
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(UPDATE_BANNER_HEIGHT)
+            .clickable(onClick = onLater)
+    ) {
+        Icon(Icons.Filled.Close, contentDescription = strings.updateLater, modifier = Modifier.size(18.dp))
     }
 }
 
