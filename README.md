@@ -365,7 +365,9 @@ Every section, top to bottom, each with its own icon:
   detail, and a Resend button; see
   [Send errors & log history](#send-errors--log-history). Survives "Reset" (it's device-level
   diagnostic data, not a setting)
-- **Reset** — clears everything above back to defaults (never touches device type or language)
+- **Reset** — clears everything above back to defaults (never touches device type or language),
+  after a confirmation dialog (*Cancel* / red *Reset*) — a stray tap can't wipe Base URL, Factory
+  Code and the rest, and Cancel leaves even unsaved edits as they were
 - **Save** — validates and persists; the app's current version is shown just below this row
 
 ![Language, Reset/Save, and the version footer](docs/screenshots/settings-lang-reset-save.png)

@@ -108,6 +108,7 @@ fun SettingsScreen(
     var draft by remember { mutableStateOf(viewModel.config.value) }
     var errors by remember { mutableStateOf(emptyMap<String, ValidationErrorType>()) }
     var showLogHistory by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
     val powerRange = remember { viewModel.powerRange }
     val antennaOptions = remember { viewModel.antennaOptions() }
     var rrTypeOptions by remember { mutableStateOf(viewModel.rrTypeOptions()) }
@@ -445,11 +446,10 @@ fun SettingsScreen(
                 LogHistoryDialog(viewModel = viewModel, onDismiss = { showLogHistory = false })
             }
 
-            Spacer(Modifier.height(20.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = {
+            if (showResetConfirm) {
+                ResetConfirmDialog(
+                    onConfirm = {
+                        showResetConfirm = false
                         draft = viewModel.resetConfig()
                         errors = emptyMap()
                         // Reset wipes the cached lists too — without this the dropdowns would
@@ -459,6 +459,16 @@ fun SettingsScreen(
                         viewModel.cancelDropdownFetch()
                         Toast.makeText(context, strings.configResetToast, Toast.LENGTH_SHORT).show()
                     },
+                    onCancel = { showResetConfirm = false }
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    // Wipes every setting and the dropdown cache in one tap — always confirmed first.
+                    onClick = { showResetConfirm = true },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Filled.RestartAlt, contentDescription = null)
@@ -660,6 +670,26 @@ private fun SelectOnlyDropdownField(label: String, value: String, options: List<
             }
         }
     }
+}
+
+/** Reset clears every setting (Base URL, Factory Code, …) plus the dropdown cache, so a stray
+ * tap mustn't do it outright. Cancel leaves everything — including unsaved edits — untouched. */
+@Composable
+private fun ResetConfirmDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.resetConfirmTitle) },
+        text = { Text(strings.resetConfirmMessage) },
+        confirmButton = {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)) {
+                Text(strings.reset)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(strings.cancel) }
+        }
+    )
 }
 
 // Long batch payloads are cut off on screen — the stored body (and what a resend posts) is whole.
