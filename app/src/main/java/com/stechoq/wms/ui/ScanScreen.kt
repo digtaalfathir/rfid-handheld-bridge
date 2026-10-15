@@ -3,7 +3,12 @@ package com.stechoq.wms.ui
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -47,8 +53,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +67,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,6 +83,7 @@ import com.stechoq.wms.data.BarcodeScanRecord
 import com.stechoq.wms.data.BarcodeSendStatus
 import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ReplacementReason
+import com.stechoq.wms.data.ScanConfig
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
 import com.stechoq.wms.network.formatSendError
@@ -102,36 +110,56 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(strings.appTitle, fontWeight = FontWeight.SemiBold) },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = strings.settingsDescription)
+            // A 48dp bar rather than TopAppBar's fixed 64dp: on a 480×800 handheld every dp up
+            // here comes out of the tag list. Distinct accent color is the main visual cue that
+            // Barcode mode is active, since the two modes otherwise share the same screen chrome.
+            Surface(color = if (isBarcodeMode) BarcodeAccent.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(48.dp).padding(start = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        strings.appTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box {
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = strings.settingsDescription)
+                        }
+                        // The update banner was put off with "Later" — a small reminder it's still there.
+                        if (state.updateBannerHidden && state.updateStatus !is UpdateStatus.Idle) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 10.dp, end = 10.dp)
+                                    .size(8.dp)
+                                    .background(ErrorRed, CircleShape)
+                            )
+                        }
                     }
-                },
-                // Distinct accent color is the main visual cue that Barcode mode is active,
-                // since the two modes otherwise share the same screen chrome.
-                colors = if (isBarcodeMode) {
-                    TopAppBarDefaults.topAppBarColors(containerColor = BarcodeAccent.copy(alpha = 0.12f))
-                } else {
-                    TopAppBarDefaults.topAppBarColors()
                 }
-            )
+            }
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp)
         ) {
-            if (state.updateStatus !is UpdateStatus.Idle) {
+            ConfigChipsRow(config = config, onClick = onOpenSettings)
+            Spacer(Modifier.height(6.dp))
+
+            if (state.updateStatus !is UpdateStatus.Idle && !state.updateBannerHidden) {
                 UpdateBanner(
                     status = state.updateStatus,
                     onDownload = { viewModel.downloadUpdate() },
-                    onInstall = { viewModel.installUpdate() }
+                    onInstall = { viewModel.installUpdate() },
+                    onLater = { viewModel.dismissUpdateBanner() }
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
             }
 
             if (isBarcodeMode) {
@@ -143,11 +171,11 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 SummaryCard(
                     state = state,
                     onToggleScan = { viewModel.toggleScan() },
-                    onStartNew = { viewModel.startNewScan() },
+                    onStartNew = { viewModel.requestNewScan() },
                     onRetrySend = { viewModel.retrySend() }
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
 
                 SearchSortRow(
                     query = state.searchQuery,
@@ -156,7 +184,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     onSortChange = viewModel::setSortOption
                 )
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
 
                 if (state.tags.isEmpty()) {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -171,7 +199,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                     LaunchedEffect(state.tags.firstOrNull()?.epc) {
                         if (state.tags.isNotEmpty()) listState.animateScrollToItem(0)
                     }
-                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(state.tags, key = { it.epc }) { tag ->
                             TagRow(tag) { epc ->
                                 clipboard.setText(AnnotatedString(epc))
@@ -187,12 +215,22 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
     state.replacementPrompt?.let { prompt ->
         ReplacementDialog(
             prompt = prompt,
+            factoryMissing = config.factoryId <= 0,
             onSubmit = { oldRfid, reason ->
                 viewModel.submitReplacement(oldRfid, reason) { success ->
                     if (success) Toast.makeText(context, strings.replacementSuccessToast, Toast.LENGTH_SHORT).show()
                 }
             },
             onCancel = { viewModel.cancelReplacement() }
+        )
+    }
+
+    state.unsentTagsPrompt?.let { prompt ->
+        UnsentTagsDialog(
+            count = prompt.count,
+            onSendFirst = { viewModel.sendUnsentTagsFirst() },
+            onDiscard = { viewModel.discardUnsentTags() },
+            onCancel = { viewModel.dismissUnsentTagsPrompt() }
         )
     }
 }
@@ -299,20 +337,14 @@ private fun SummaryCard(
     onRetrySend: () -> Unit
 ) {
     val strings = LocalStrings.current
-    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth()) {
-                StatItem(strings.totalDetected, state.totalReads.toString(), Modifier.weight(1f))
-                StatItem(strings.totalUnique, state.tags.size.toString(), Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "${strings.lastScanPrefix}${formatTime(state.lastScanTime)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    // Kept to one small summary line + the scan button: on a 480×800 handheld the old card (big
+    // numbers, separate "last scan" line, a status line under the button) left room for barely
+    // one tag row.
+    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            SummaryLine(state)
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(6.dp))
 
             when {
                 state.scanning -> Button(
@@ -325,7 +357,7 @@ private fun SummaryCard(
                     Text(strings.stopScan)
                 }
 
-                state.tags.isEmpty() -> Button(
+                state.uniqueCount == 0 -> Button(
                     onClick = onToggleScan,
                     enabled = state.readerConnected,
                     modifier = Modifier.fillMaxWidth().height(48.dp)
@@ -342,7 +374,9 @@ private fun SummaryCard(
                 else -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = onStartNew,
-                        enabled = state.readerConnected,
+                        // Not while a send is in flight — clearing then would lose the tags if
+                        // that send turns out to fail.
+                        enabled = state.readerConnected && state.sendStatus !is SendStatus.Sending,
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f).height(48.dp)
                     ) {
@@ -370,63 +404,194 @@ private fun SummaryCard(
                 }
             }
 
-            AnimatedVisibility(visible = state.sendStatus !is SendStatus.Idle) {
+            // Only a failure gets its own line (message + Retry) — Sending/Sent ride in the summary
+            // line above. A send error is about tags still on screen — never shown once there are
+            // none left.
+            val error = state.sendStatus as? SendStatus.Error
+            AnimatedVisibility(visible = error != null && state.uniqueCount > 0) {
                 Column {
-                    Spacer(Modifier.height(8.dp))
-                    SendStatusBanner(state.sendStatus, onRetrySend)
+                    Spacer(Modifier.height(6.dp))
+                    if (error != null) SendStatusBanner(error, onRetrySend)
                 }
             }
         }
     }
 }
 
+/** "12 unik · 340 terdeteksi" on the left; on the right the last scan time, with the send
+ * status in front of it while there is one (spinner = sending, ✓ = sent, ✗ = failed). */
 @Composable
-private fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstall: () -> Unit) {
+private fun SummaryLine(state: ScanUiState) {
     val strings = LocalStrings.current
-    Card(modifier = Modifier.fillMaxWidth()) {
+    // The counts are what an operator glances at, so they're set larger than their labels — the
+    // labels stay small so the whole line still fits one row on a 320dp-wide screen.
+    val numberStyle = SpanStyle(
+        fontWeight = FontWeight.Bold,
+        fontSize = MaterialTheme.typography.titleMedium.fontSize,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    val counts = buildAnnotatedString {
+        withStyle(numberStyle) { append(state.uniqueCount.toString()) }
+        append(" ${strings.summaryUnique} · ")
+        withStyle(numberStyle) { append(state.totalReads.toString()) }
+        append(" ${strings.summaryDetected}")
+    }
+    Row(modifier = Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            counts,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        val time = state.lastScanTime?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it)) }
+        when (state.sendStatus) {
+            SendStatus.Sending -> {
+                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(4.dp))
+                Text(strings.sending, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            }
+            is SendStatus.Success -> Text(
+                listOfNotNull("✓ ${strings.sentPrefix}", time).joinToString(" "),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = SuccessGreen,
+                maxLines = 1
+            )
+            is SendStatus.Error -> Text(
+                listOfNotNull("✗", time).joinToString(" "),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = ErrorRed,
+                maxLines = 1
+            )
+            SendStatus.Idle -> if (time != null) {
+                Text(
+                    "${strings.lastScanPrefix}$time",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/** The saved config at a glance — before this, only Barcode mode had any on-screen cue, so a
+ * wrong mode/server/factory only showed up after data had already gone out. Reads the saved
+ * config, so it updates as soon as Settings saves. Scrolls sideways rather than cutting off; the
+ * whole row opens Settings. */
+@Composable
+private fun ConfigChipsRow(config: ScanConfig, onClick: () -> Unit) {
+    val strings = LocalStrings.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = strings.configChipsOpenSettings, onClick = onClick)
+            .horizontalScroll(rememberScrollState())
+    ) {
+        val isBarcode = config.inputMode == InputMode.BARCODE
+        ConfigChip(strings.scanModeLabel(config.inputMode), accent = if (isBarcode) BarcodeAccent else null)
+        ConfigChip(config.mode.label)
+        if (config.opname) ConfigChip(strings.logOpname)
+        // Scanning behaves completely differently with Replacement on — hard to miss on purpose.
+        if (config.replacementActive) ConfigChip(strings.logTypeReplacement, accent = WarningAmber)
+        // A missing RR Type / Factory Code would go out empty — shown as a red "–" chip instead.
+        MissingAwareChip(strings.rrTypeLabel, config.rrType)
+        MissingAwareChip(strings.factoryCodeLabel, config.factoryCode)
+        ScanConfig.serverShortName(config.baseUrl).takeIf { it.isNotBlank() }?.let { ConfigChip(it) }
+    }
+}
+
+@Composable
+private fun MissingAwareChip(label: String, value: String) {
+    if (value.isNotBlank()) ConfigChip(value) else ConfigChip("$label –", accent = ErrorRed)
+}
+
+/** [accent] fills the chip (white text) for the ones that must stand out; plain chips are muted. */
+@Composable
+private fun ConfigChip(text: String, accent: Color? = null) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = accent ?: MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (accent != null) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (accent != null) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+// Single slim row (about half the old card's height) — it shares the screen with the tag list.
+private val UPDATE_BANNER_HEIGHT = 32.dp
+
+@Composable
+internal fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstall: () -> Unit, onLater: (() -> Unit)? = null) {
+    val strings = LocalStrings.current
+    // The banner sits right under the config chips, which are tapped often — a stray extra tap
+    // landing on Update shouldn't start a download on its own, so it's confirmed first.
+    var confirmDownload by remember { mutableStateOf(false) }
+    if (confirmDownload) {
+        val version = (status as? UpdateStatus.Available)?.info?.version
+        AlertDialog(
+            onDismissRequest = { confirmDownload = false },
+            title = { Text(strings.updateConfirmTitle, fontWeight = FontWeight.SemiBold) },
+            text = { Text(strings.updateConfirmMessage(version)) },
+            confirmButton = {
+                Button(onClick = {
+                    confirmDownload = false
+                    onDownload()
+                }) { Text(strings.updateConfirmDownload) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDownload = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().height(UPDATE_BANNER_HEIGHT).padding(start = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val slimButtonPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
             when (status) {
                 is UpdateStatus.Available -> {
-                    Text(
-                        "${strings.updateAvailablePrefix}${status.info.version}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                        Text(strings.updateNowButton, style = MaterialTheme.typography.labelMedium)
+                    BannerText("${strings.updateAvailablePrefix}${status.info.version}")
+                    TextButton(onClick = { confirmDownload = true }, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
+                        Text(strings.updateNowButton, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     }
+                    onLater?.let { BannerLaterButton(it) }
                 }
                 UpdateStatus.Downloading -> {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text(strings.downloadingUpdate, style = MaterialTheme.typography.bodyMedium)
+                    BannerText(strings.downloadingUpdate)
                 }
                 is UpdateStatus.ReadyToInstall -> {
-                    Text(
-                        strings.updateReadyToInstall,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onInstall, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                        Text(strings.installUpdateButton, style = MaterialTheme.typography.labelMedium)
+                    BannerText(strings.updateReadyToInstall)
+                    TextButton(onClick = onInstall, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
+                        Text(strings.installUpdateButton, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     }
+                    Spacer(Modifier.width(4.dp))
                 }
                 is UpdateStatus.Error -> {
-                    Text(
-                        "${strings.updateErrorPrefix}${status.message}",
-                        color = ErrorRed,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                    BannerText("${strings.updateErrorPrefix}${status.message}", color = ErrorRed)
+                    TextButton(onClick = { confirmDownload = true }, contentPadding = slimButtonPadding, modifier = Modifier.height(UPDATE_BANNER_HEIGHT)) {
                         Text(strings.retry, style = MaterialTheme.typography.labelMedium)
                     }
+                    onLater?.let { BannerLaterButton(it) }
                 }
                 UpdateStatus.Idle -> {}
             }
@@ -435,34 +600,68 @@ private fun UpdateBanner(status: UpdateStatus, onDownload: () -> Unit, onInstall
 }
 
 @Composable
-private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
+private fun RowScope.BannerText(text: String, color: Color = Color.Unspecified) {
+    Text(
+        text,
+        color = color,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f)
+    )
+}
+
+/** "Later" (✕): hides the banner for this version — see ScanViewModel.dismissUpdateBanner. */
+@Composable
+private fun BannerLaterButton(onLater: () -> Unit) {
     val strings = LocalStrings.current
-    when (status) {
-        is SendStatus.Sending -> Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(6.dp))
-            Text(strings.sending, style = MaterialTheme.typography.bodySmall)
-        }
-        is SendStatus.Success -> Text(
-            strings.sentSuccess(status.count),
-            color = SuccessGreen,
-            style = MaterialTheme.typography.bodySmall
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(UPDATE_BANNER_HEIGHT)
+            .clickable(onClick = onLater)
+    ) {
+        Icon(Icons.Filled.Close, contentDescription = strings.updateLater, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+private fun SendStatusBanner(status: SendStatus.Error, onRetry: () -> Unit) {
+    val strings = LocalStrings.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val display = formatSendError(status.message, strings.systemErrorGeneric)
+        Text(
+            strings.unsentSendError(status.unsentCount, display.message),
+            color = if (display.isSystemError) ErrorRed else BluePrimary,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f)
         )
-        is SendStatus.Error -> Row(verticalAlignment = Alignment.CenterVertically) {
-            val display = formatSendError(status.message, strings.systemErrorGeneric)
-            Text(
-                display.message,
-                color = if (display.isSystemError) ErrorRed else BluePrimary,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(6.dp))
-            OutlinedButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                Text(strings.retry, style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.width(6.dp))
+        OutlinedButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+            Text(strings.retrySend, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+/** Shown when a New Scan (button or trigger) would clear tags whose last send failed — the only
+ * other copy of them is the CSV backup, which can't be resent from inside the app. */
+@Composable
+private fun UnsentTagsDialog(count: Int, onSendFirst: () -> Unit, onDiscard: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.unsentTagsTitle, fontWeight = FontWeight.SemiBold) },
+        text = { Text(strings.unsentTagsMessage(count)) },
+        confirmButton = {
+            Button(onClick = onSendFirst) { Text(strings.unsentTagsSendFirst) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onCancel) { Text(strings.cancel) }
+                TextButton(onClick = onDiscard) { Text(strings.unsentTagsDiscard, color = ErrorRed) }
             }
         }
-        SendStatus.Idle -> {}
-    }
+    )
 }
 
 /** Register + Replacement mode's mid-scan modal — appears the instant one tag is detected.
@@ -472,6 +671,9 @@ private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
 @Composable
 private fun ReplacementDialog(
     prompt: ReplacementPrompt,
+    // No usable factory_id in the saved config (Settings never picked a Factory Code, or picked it
+    // before the id was stored) — Submit stays disabled, since the server needs that id.
+    factoryMissing: Boolean,
     onSubmit: (oldRfid: String, reason: ReplacementReason) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -526,7 +728,10 @@ private fun ReplacementDialog(
                     }
                 }
 
-                if (prompt.error != null) {
+                if (factoryMissing) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(strings.replacementFactoryMissing, color = ErrorRed, style = MaterialTheme.typography.bodySmall)
+                } else if (prompt.error != null) {
                     Spacer(Modifier.height(12.dp))
                     val display = formatSendError(prompt.error, strings.systemErrorGeneric)
                     Text(
@@ -540,7 +745,7 @@ private fun ReplacementDialog(
         confirmButton = {
             Button(
                 onClick = { onSubmit(oldRfid, reason) },
-                enabled = !prompt.submitting && oldRfid.isNotBlank()
+                enabled = !prompt.submitting && !factoryMissing && oldRfid.isNotBlank()
             ) {
                 if (prompt.submitting) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
@@ -555,23 +760,9 @@ private fun ReplacementDialog(
     )
 }
 
-@Composable
-private fun StatItem(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    valueColor: Color = Color.Unspecified
-) {
-    Column(modifier) {
-        Text(
-            value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = valueColor
-        )
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
+// Search field and sort button share this height — shorter than a standard 48dp row, since it
+// sits between the scan button and the tag list on a small screen.
+private val SEARCH_ROW_HEIGHT = 36.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -587,7 +778,12 @@ private fun SearchSortRow(
         Spacer(Modifier.width(4.dp))
         Box {
             var expanded by remember { mutableStateOf(false) }
-            IconButton(onClick = { expanded = true }) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(SEARCH_ROW_HEIGHT)
+                    .clickable(onClickLabel = strings.sortDescription) { expanded = true }
+            ) {
                 Icon(Icons.Filled.Sort, contentDescription = strings.sortDescription)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -606,8 +802,8 @@ private fun SearchSortRow(
 private fun CompactSearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     Surface(
-        modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.height(SEARCH_ROW_HEIGHT),
+        shape = RoundedCornerShape(SEARCH_ROW_HEIGHT / 2),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
@@ -659,7 +855,8 @@ private fun TagRow(tag: TagRecord, onCopy: (String) -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                // Tighter than a default card row so five fit on a 480×800 screen; same content.
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {

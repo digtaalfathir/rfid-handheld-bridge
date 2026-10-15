@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -28,7 +30,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
@@ -50,11 +51,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,17 +68,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.stechoq.wms.BuildConfig
+import com.stechoq.wms.DropdownFetchState
 import com.stechoq.wms.ScanViewModel
+import com.stechoq.wms.UpdateStatus
 import com.stechoq.wms.data.AppLanguage
 import com.stechoq.wms.data.FactoryCodeOption
 import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ScanConfig
 import com.stechoq.wms.data.ScanMode
+import com.stechoq.wms.data.SendContext
 import com.stechoq.wms.data.SendLogEntry
+import com.stechoq.wms.data.SendType
 import com.stechoq.wms.data.ValidationErrorType
 import com.stechoq.wms.ui.theme.BarcodeAccent
 import com.stechoq.wms.ui.theme.ErrorRed
@@ -83,6 +92,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+
+// How long the operator has to stop typing in Base URL before RR Type / Factory Code are fetched —
+// the field fires per keystroke, and every partial URL along the way isn't worth a request.
+private const val BASE_URL_DEBOUNCE_MS = 1000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,8 +110,8 @@ fun SettingsScreen(
     val strings = LocalStrings.current
     var draft by remember { mutableStateOf(viewModel.config.value) }
     var errors by remember { mutableStateOf(emptyMap<String, ValidationErrorType>()) }
-    var testing by remember { mutableStateOf(false) }
     var showLogHistory by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
     val powerRange = remember { viewModel.powerRange }
     val antennaOptions = remember { viewModel.antennaOptions() }
     var rrTypeOptions by remember { mutableStateOf(viewModel.rrTypeOptions()) }
@@ -105,17 +119,110 @@ fun SettingsScreen(
     val endpointOptions = remember { viewModel.endpointOptions() }
     val initialYearOptions = remember { viewModel.initialYearOptions() }
     var factoryCodeOptions by remember { mutableStateOf(viewModel.factoryCodeOptions()) }
+    val fetchState by viewModel.dropdownFetch.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+    // Set by a pick from the Base URL menu, so the effect below fetches right away instead of
+    // waiting out the typing debounce.
+    var skipDebounce by remember { mutableStateOf(false) }
+    var isFirstBaseUrlEffect by remember { mutableStateOf(true) }
+
+    LaunchedEffect(draft.baseUrl) {
+        // Any change cancels the fetch in flight, and any status left from an earlier visit.
+        viewModel.cancelDropdownFetch()
+        if (isFirstBaseUrlEffect) {
+            isFirstBaseUrlEffect = false
+            // Opening Settings isn't a Base URL change — only fetch when there's nothing cached
+            // to show (fresh install, or after Reset).
+            val cacheEmpty = rrTypeOptions.isEmpty() || factoryCodeOptions.isEmpty()
+            if (cacheEmpty && ScanConfig.isFetchableBaseUrl(draft.baseUrl)) {
+                viewModel.fetchDropdownData(draft.baseUrl)
+            }
+            return@LaunchedEffect
+        }
+        // Typing again restarts this effect, which cancels the delay — so only the last
+        // keystroke's URL ever gets fetched.
+        if (!skipDebounce) delay(BASE_URL_DEBOUNCE_MS)
+        skipDebounce = false
+        if (ScanConfig.isFetchableBaseUrl(draft.baseUrl)) {
+            viewModel.fetchDropdownData(draft.baseUrl)
+        }
+    }
+
+    LaunchedEffect(fetchState) {
+        val state = fetchState
+        if (state is DropdownFetchState.Success && state.baseUrl == draft.baseUrl) {
+            rrTypeOptions = state.rrTypes
+            factoryCodeOptions = state.factoryCodes
+            draft = draft.keepingOnlyAvailable(state.rrTypes, state.factoryCodes)
+        }
+    }
+
+    // Unsaved = the draft differs from what's actually saved. This includes edits Settings made
+    // on its own (e.g. a Base URL change clearing an RR Type the new server doesn't have) — those
+    // are just as lost on leaving without Save.
+    val savedConfig by viewModel.config.collectAsState()
+    val hasUnsavedChanges = draft != savedConfig
+    var showUnsavedConfirm by remember { mutableStateOf(false) }
+
+    // Validation still applies however Save is reached; on failure stay here with errors shown.
+    fun saveAndExit() {
+        val result = viewModel.saveConfig(draft)
+        errors = result
+        if (result.isEmpty()) {
+            Toast.makeText(context, strings.configSavedToast, Toast.LENGTH_SHORT).show()
+            onDone()
+        } else {
+            Toast.makeText(context, strings.configInvalidToast, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun requestExit() {
+        if (hasUnsavedChanges) showUnsavedConfirm = true else onDone()
+    }
+
+    // The Android back button/gesture, same as the top bar's arrow.
+    BackHandler { requestExit() }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(strings.settingsTitle, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    IconButton(onClick = onDone) {
+                    IconButton(onClick = { requestExit() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = strings.backDescription)
                     }
                 }
             )
+        },
+        // Pinned so Save/Reset never need a scroll to the bottom of this long page.
+        bottomBar = {
+            Surface(shadowElevation = 8.dp) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    OutlinedButton(
+                        // Wipes every setting and the dropdown cache in one tap — always confirmed first.
+                        onClick = { showResetConfirm = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.RestartAlt, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.reset)
+                    }
+                    Button(
+                        onClick = { saveAndExit() },
+                        enabled = hasUnsavedChanges,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.Save, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.save)
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -125,6 +232,17 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            // Where the Scan screen's red dot on the Settings icon points: the update banner the
+            // operator put off with "Later" stays reachable here, at the top, without a restart.
+            if (uiState.updateStatus !is UpdateStatus.Idle) {
+                UpdateBanner(
+                    status = uiState.updateStatus,
+                    onDownload = { viewModel.downloadUpdate() },
+                    onInstall = { viewModel.installUpdate() }
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
             SectionCard(
                 title = strings.scanModeTitle,
                 icon = Icons.Filled.QrCodeScanner,
@@ -219,9 +337,24 @@ fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
 
             SectionCard(title = strings.apiConfigTitle, icon = Icons.Filled.Cloud) {
-                DropdownField(strings.baseUrlLabel, draft.baseUrl, baseUrlOptions, errors["baseUrl"]?.let(strings::validationMessage)) {
+                DropdownField(
+                    strings.baseUrlLabel,
+                    draft.baseUrl,
+                    baseUrlOptions,
+                    errors["baseUrl"]?.let(strings::validationMessage),
+                    onOptionSelected = { picked ->
+                        if (picked == draft.baseUrl) {
+                            // Unchanged, so the effect won't re-run — treat the pick as a refresh.
+                            viewModel.fetchDropdownData(picked)
+                        } else {
+                            skipDebounce = true
+                            draft = draft.copy(baseUrl = picked)
+                        }
+                    }
+                ) {
                     draft = draft.copy(baseUrl = it)
                 }
+                DropdownFetchStatus(fetchState, onRetry = { viewModel.fetchDropdownData(draft.baseUrl) })
                 Spacer(Modifier.height(8.dp))
                 DropdownField(strings.endpointLabel, draft.endpoint, endpointOptions, errors["endpoint"]?.let(strings::validationMessage)) {
                     draft = draft.copy(endpoint = it)
@@ -231,35 +364,6 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 DropdownField(strings.antennaLabel, draft.antenna, antennaOptions, errors["antenna"]?.let(strings::validationMessage)) {
                     draft = draft.copy(antenna = it)
-                }
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = {
-                        testing = true
-                        viewModel.testConnection(draft.fullApiUrl()) { connectionError ->
-                            viewModel.fetchDropdownData(draft.baseUrl) { fetchOk ->
-                                testing = false
-                                rrTypeOptions = viewModel.rrTypeOptions()
-                                factoryCodeOptions = viewModel.factoryCodeOptions()
-                                val message = when {
-                                    connectionError != null -> "${strings.testFailedPrefix}$connectionError"
-                                    !fetchOk -> strings.dropdownFetchFailed
-                                    else -> strings.serverReachable
-                                }
-                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
-                    enabled = !testing,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (testing) {
-                        CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Filled.NetworkCheck, contentDescription = null)
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (testing) strings.testing else strings.testConnection)
                 }
             }
 
@@ -282,7 +386,7 @@ fun SettingsScreen(
                     strings.factoryCodeLabel,
                     draft.factoryCode,
                     factoryCodeOptions.map { it.code to "${it.code} - ${it.name}" },
-                    null
+                    errors["factoryCode"]?.let(strings::validationMessage)
                 ) { selectedCode ->
                     // factoryId rides along with factoryCode — the RFID-replacement endpoint
                     // wants the numeric id, the regular scan payload wants the code string, both
@@ -316,7 +420,12 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(strings.soundToggleLabel, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        strings.soundToggleLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Switch(checked = draft.soundEnabled, onCheckedChange = { draft = draft.copy(soundEnabled = it) })
                 }
                 if (draft.soundEnabled) {
@@ -410,47 +519,49 @@ fun SettingsScreen(
             }
 
             if (showLogHistory) {
-                LogHistoryDialog(entries = viewModel.sendLog(), onDismiss = { showLogHistory = false })
+                LogHistoryDialog(viewModel = viewModel, onDismiss = { showLogHistory = false })
+            }
+
+            if (showResetConfirm) {
+                ResetConfirmDialog(
+                    onConfirm = {
+                        showResetConfirm = false
+                        draft = viewModel.resetConfig()
+                        errors = emptyMap()
+                        // Reset wipes the cached lists too — without this the dropdowns would
+                        // keep showing them until Settings is reopened.
+                        rrTypeOptions = viewModel.rrTypeOptions()
+                        factoryCodeOptions = viewModel.factoryCodeOptions()
+                        viewModel.cancelDropdownFetch()
+                        Toast.makeText(context, strings.configResetToast, Toast.LENGTH_SHORT).show()
+                    },
+                    onCancel = { showResetConfirm = false }
+                )
+            }
+
+            if (showUnsavedConfirm) {
+                UnsavedChangesDialog(
+                    onSave = {
+                        showUnsavedConfirm = false
+                        saveAndExit()
+                    },
+                    onDiscard = {
+                        showUnsavedConfirm = false
+                        onDone()
+                    },
+                    onCancel = { showUnsavedConfirm = false }
+                )
             }
 
             Spacer(Modifier.height(20.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = {
-                        draft = viewModel.resetConfig()
-                        errors = emptyMap()
-                        Toast.makeText(context, strings.configResetToast, Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Filled.RestartAlt, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.reset)
-                }
-                Button(
-                    onClick = {
-                        val result = viewModel.saveConfig(draft)
-                        errors = result
-                        if (result.isEmpty()) {
-                            Toast.makeText(context, strings.configSavedToast, Toast.LENGTH_SHORT).show()
-                            onDone()
-                        } else {
-                            Toast.makeText(context, strings.configInvalidToast, Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Filled.Save, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.save)
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
             Text(
-                "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
+                // e.g. "Versi 1.1 · Update tersedia: v1.5.15" — the banner at the top is where
+                // to start it; this just says so where the version is naturally looked up.
+                listOfNotNull(
+                    "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
+                    uiState.newerVersion?.let { "${strings.updateAvailablePrefix}$it" }
+                ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -508,9 +619,19 @@ private fun ReadOnlyField(label: String, value: String) {
  * letting the user place a cursor, so a picked value could never be cleared to type something
  * outside the list. The icon button is the only thing that opens/closes the menu; the field
  * itself behaves like any other text field at all times.
+ *
+ * [onOptionSelected] lets a caller tell a menu pick apart from typing (Base URL fetches on a pick
+ * immediately, but debounces typing); left null, a pick goes through [onValueChange] like typing.
  */
 @Composable
-private fun DropdownField(label: String, value: String, options: List<String>, error: String?, onValueChange: (String) -> Unit) {
+private fun DropdownField(
+    label: String,
+    value: String,
+    options: List<String>,
+    error: String?,
+    onOptionSelected: ((String) -> Unit)? = null,
+    onValueChange: (String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedTextField(
@@ -532,11 +653,48 @@ private fun DropdownField(label: String, value: String, options: List<String>, e
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
-                        onValueChange(option)
+                        (onOptionSelected ?: onValueChange)(option)
                         expanded = false
                     }
                 )
             }
+        }
+    }
+}
+
+/** The RR Type / Factory Code fetch status shown under Base URL — replaces the old Toast, which
+ * vanished before an operator could read it and left no way to retry. */
+@Composable
+private fun DropdownFetchStatus(state: DropdownFetchState, onRetry: () -> Unit) {
+    val strings = LocalStrings.current
+    when (state) {
+        DropdownFetchState.Idle -> Unit
+        is DropdownFetchState.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                strings.dropdownFetchLoading,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        is DropdownFetchState.Success -> Text(
+            strings.dropdownFetchConnected(state.rrTypes.size, state.factoryCodes.size),
+            style = MaterialTheme.typography.bodySmall,
+            color = SuccessGreen
+        )
+        is DropdownFetchState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(strings.dropdownFetchFailed, style = MaterialTheme.typography.bodySmall, color = ErrorRed)
+                if (state.hasStaleCache) {
+                    Text(
+                        strings.dropdownFetchStaleHint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            TextButton(onClick = onRetry) { Text(strings.tryAgain) }
         }
     }
 }
@@ -578,12 +736,62 @@ private fun SelectOnlyDropdownField(label: String, value: String, options: List<
     }
 }
 
-/** The full/raw detail behind whatever generalized message the Scan screen showed at the time —
- * so a system-error banner ("contact WMS Team") doesn't leave the actual cause unrecoverable. */
+/** Leaving Settings (arrow or Android back) with edits not yet saved. */
 @Composable
-private fun LogHistoryDialog(entries: List<SendLogEntry>, onDismiss: () -> Unit) {
+private fun UnsavedChangesDialog(onSave: () -> Unit, onDiscard: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.unsavedChangesTitle) },
+        text = { Text(strings.unsavedChangesMessage) },
+        confirmButton = {
+            Button(onClick = onSave) { Text(strings.save) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onCancel) { Text(strings.cancel) }
+                TextButton(onClick = onDiscard) { Text(strings.discard, color = ErrorRed) }
+            }
+        }
+    )
+}
+
+/** Reset clears every setting (Base URL, Factory Code, …) plus the dropdown cache, so a stray
+ * tap mustn't do it outright. Cancel leaves everything — including unsaved edits — untouched. */
+@Composable
+private fun ResetConfirmDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.resetConfirmTitle) },
+        text = { Text(strings.resetConfirmMessage) },
+        confirmButton = {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)) {
+                Text(strings.reset)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(strings.cancel) }
+        }
+    )
+}
+
+// Long batch payloads are cut off on screen — the stored body (and what a resend posts) is whole.
+private const val LOG_PAYLOAD_DISPLAY_LIMIT = 2000
+
+/** The full/raw detail behind whatever generalized message the Scan screen showed at the time —
+ * so a system-error banner ("contact WMS Team") doesn't leave the actual cause unrecoverable —
+ * plus what each send was (type, config, exact payload) and a way to resend it as it went out. */
+@Composable
+private fun LogHistoryDialog(viewModel: ScanViewModel, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     val strings = LocalStrings.current
     val timeFormat = remember { SimpleDateFormat("dd/MM HH:mm:ss", Locale.US) }
+    var entries by remember { mutableStateOf(viewModel.sendLog()) }
+    var expanded by remember { mutableStateOf(emptySet<SendLogEntry>()) }
+    var confirming by remember { mutableStateOf<SendLogEntry?>(null) }
+    var resending by remember { mutableStateOf<SendLogEntry?>(null) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.logHistoryTitle) },
@@ -598,21 +806,16 @@ private fun LogHistoryDialog(entries: List<SendLogEntry>, onDismiss: () -> Unit)
                         .verticalScroll(rememberScrollState())
                 ) {
                     entries.forEachIndexed { index, entry ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                if (entry.success) strings.logHistorySuccessLabel else strings.logHistoryFailedLabel,
-                                color = if (entry.success) SuccessGreen else ErrorRed,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                timeFormat.format(Date(entry.timestamp)),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(entry.detail, style = MaterialTheme.typography.bodySmall)
+                        LogEntryItem(
+                            entry = entry,
+                            timeFormat = timeFormat,
+                            expanded = entry in expanded,
+                            payload = { viewModel.sendLogPayload(entry) },
+                            resending = resending == entry,
+                            resendEnabled = resending == null,
+                            onToggle = { expanded = if (entry in expanded) expanded - entry else expanded + entry },
+                            onResend = { confirming = entry }
+                        )
                         if (index != entries.lastIndex) Spacer(Modifier.height(12.dp))
                     }
                 }
@@ -621,5 +824,157 @@ private fun LogHistoryDialog(entries: List<SendLogEntry>, onDismiss: () -> Unit)
         confirmButton = {
             TextButton(onClick = onDismiss) { Text(strings.close) }
         }
+    )
+
+    confirming?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { confirming = null },
+            title = { Text(strings.logResendConfirmTitle) },
+            text = {
+                Column {
+                    Text(strings.logResendConfirmMessage, style = MaterialTheme.typography.bodyMedium)
+                    Text(entry.context?.url.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    if (entry.success) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(strings.logResendDuplicateWarning, style = MaterialTheme.typography.bodySmall, color = ErrorRed)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    confirming = null
+                    resending = entry
+                    viewModel.resendLogEntry(entry) { success ->
+                        resending = null
+                        entries = viewModel.sendLog()
+                        val message = if (success) strings.logResendSuccessToast else strings.logResendFailedToast
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text(strings.logResend) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = null }) { Text(strings.cancel) }
+            }
+        )
+    }
+}
+
+@Composable
+private fun LogEntryItem(
+    entry: SendLogEntry,
+    timeFormat: SimpleDateFormat,
+    expanded: Boolean,
+    payload: () -> String?,
+    resending: Boolean,
+    resendEnabled: Boolean,
+    onToggle: () -> Unit,
+    onResend: () -> Unit
+) {
+    val strings = LocalStrings.current
+    val context = entry.context
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (context != null) {
+                Text(
+                    strings.logBadge(context),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (context.type == SendType.BARCODE) BarcodeAccent else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                if (entry.success) strings.logHistorySuccessLabel else strings.logHistoryFailedLabel,
+                color = if (entry.success) SuccessGreen else ErrorRed,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Text(
+            listOfNotNull(timeFormat.format(Date(entry.timestamp)), context?.let(strings::logItemCount)).joinToString(" · "),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        entry.resendOf?.let {
+            Text(
+                "${strings.logResentFromPrefix}${timeFormat.format(Date(it))}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // if/else rather than an early return@Column: returning early out of an inline composable
+        // lambda corrupts Compose's slot table on this compiler version (crash on open).
+        if (context == null) {
+            // Logged before type/config/payload were recorded — show the raw detail as before.
+            Text(entry.detail, style = MaterialTheme.typography.bodySmall)
+        } else {
+            LogEntryDetails(entry, context, expanded, payload, resending, resendEnabled, onToggle, onResend)
+        }
+    }
+}
+
+@Composable
+private fun LogEntryDetails(
+    entry: SendLogEntry,
+    context: SendContext,
+    expanded: Boolean,
+    payload: () -> String?,
+    resending: Boolean,
+    resendEnabled: Boolean,
+    onToggle: () -> Unit,
+    onResend: () -> Unit
+) {
+    val strings = LocalStrings.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onToggle, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
+                Text(if (expanded) strings.logHideDetails else strings.logShowDetails, style = MaterialTheme.typography.labelMedium)
+            }
+            Spacer(Modifier.weight(1f))
+            if (entry.canResend) {
+                OutlinedButton(
+                    onClick = onResend,
+                    enabled = resendEnabled,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    if (resending) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(strings.logResend, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        if (expanded) {
+            val body = remember(entry) { payload() }
+            if (context.type != SendType.REPLACEMENT) {
+                LogDetailLine(strings.factoryCodeLabel, context.factoryCode)
+                LogDetailLine(strings.rrTypeLabel, context.rrType)
+            }
+            LogDetailLine(strings.logUrlLabel, context.url)
+            LogDetailLine(strings.logResponseLabel, entry.detail)
+            if (body != null) {
+                val shown = if (body.length > LOG_PAYLOAD_DISPLAY_LIMIT) body.take(LOG_PAYLOAD_DISPLAY_LIMIT) + "…" else body
+                LogDetailLine(strings.logPayloadLabel, shown, monospace = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogDetailLine(label: String, value: String, monospace: Boolean = false) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp)
+    )
+    Text(
+        value.ifBlank { "-" },
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = if (monospace) FontFamily.Monospace else null
     )
 }

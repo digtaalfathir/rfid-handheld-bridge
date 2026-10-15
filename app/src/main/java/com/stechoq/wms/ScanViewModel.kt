@@ -21,13 +21,17 @@ import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ReplacementReason
 import com.stechoq.wms.data.ScanConfig
 import com.stechoq.wms.data.ScanMode
+import com.stechoq.wms.data.SendContext
 import com.stechoq.wms.data.SendLogEntry
+import com.stechoq.wms.data.SendType
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
 import com.stechoq.wms.data.ValidationErrorType
 import com.stechoq.wms.network.ApiClient
+import com.stechoq.wms.network.OutgoingRequest
 import com.stechoq.wms.network.UpdateClient
 import com.stechoq.wms.network.UpdateInfo
+import com.stechoq.wms.network.markAsResend
 import com.stechoq.wms.rfid.ChainwayReaderManager
 import com.stechoq.wms.rfid.RfidReaderManager
 import com.stechoq.wms.rfid.ZebraReaderManager
@@ -46,6 +50,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val UI_REFRESH_INTERVAL_MS = 200L
@@ -71,7 +76,8 @@ sealed class SendStatus {
     // Raw, unlocalized detail (HTTP status + body, or an exception message) — the UI layer turns
     // this into a display message via formatSendError(), same as every other localized string
     // here coming from AppStrings rather than the ViewModel.
-    data class Error(val message: String) : SendStatus()
+    // [unsentCount]: how many tags that failed send carried — shown in the error banner.
+    data class Error(val message: String, val unsentCount: Int) : SendStatus()
 }
 
 /** State for the "replace a damaged tag" modal — shown mid-scan (Register mode + Replacement
@@ -91,19 +97,42 @@ sealed class UpdateStatus {
     data class Error(val message: String) : UpdateStatus()
 }
 
+/** Status of the RR Type / Factory Code fetch shown under Settings' Base URL field. Each state
+ * carries the Base URL it belongs to. */
+sealed class DropdownFetchState {
+    object Idle : DropdownFetchState()
+    data class Loading(val baseUrl: String) : DropdownFetchState()
+    data class Success(
+        val baseUrl: String,
+        val rrTypes: List<String>,
+        val factoryCodes: List<FactoryCodeOption>
+    ) : DropdownFetchState()
+    // hasStaleCache: the dropdowns still hold an earlier successful fetch, possibly from a
+    // different server — worth flagging, since nothing on screen otherwise says where it came from.
+    data class Failed(val baseUrl: String, val hasStaleCache: Boolean) : DropdownFetchState()
+}
+
 data class ScanUiState(
     val readerConnected: Boolean = false,
     val scanning: Boolean = false,
     val tags: List<TagRecord> = emptyList(),
     val totalReads: Int = 0,
+    // Every collected tag, regardless of the search filter — [tags] is what's visible after it.
+    val uniqueCount: Int = 0,
     val lastScanTime: Long? = null,
     val sendStatus: SendStatus = SendStatus.Idle,
     val scanStartError: String? = null,
     val searchQuery: String = "",
     val sortOption: SortOption = SortOption.LAST_SEEN_DESC,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
+    val updateBannerHidden: Boolean = false,
+    // Newest release found on GitHub when it differs from this build — kept through
+    // download/install, unlike UpdateStatus.Available which those states replace.
+    val newerVersion: String? = null,
     val barcodeScans: List<BarcodeScanRecord> = emptyList(),
-    val replacementPrompt: ReplacementPrompt? = null
+    val replacementPrompt: ReplacementPrompt? = null,
+    // Non-null while the "unsent tags" confirmation is showing.
+    val unsentTagsPrompt: UnsentTagsPrompt? = null
 )
 
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
@@ -136,6 +165,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _config = MutableStateFlow(configRepo.load())
     val config: StateFlow<ScanConfig> = _config.asStateFlow()
+
+    private val _dropdownFetch = MutableStateFlow<DropdownFetchState>(DropdownFetchState.Idle)
+    val dropdownFetch: StateFlow<DropdownFetchState> = _dropdownFetch.asStateFlow()
+    private var dropdownFetchJob: Job? = null
 
     private val _uiState = MutableStateFlow(ScanUiState())
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
@@ -175,10 +208,34 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 null
             } ?: return@launch
             if (info.version.isNotBlank() && info.version != BuildConfig.VERSION_NAME) {
-                pendingUpdate = info
-                _uiState.update { it.copy(updateStatus = UpdateStatus.Available(info)) }
+                _uiState.update {
+                    // A re-check on resume mustn't knock an in-progress download/install back to
+                    // "Available".
+                    if (it.updateStatus is UpdateStatus.Downloading || it.updateStatus is UpdateStatus.ReadyToInstall) {
+                        it
+                    } else {
+                        pendingUpdate = info
+                        it.copy(
+                            updateStatus = UpdateStatus.Available(info),
+                            newerVersion = info.version,
+                            // Stays hidden only for the version "Later" was tapped on — a newer
+                            // release brings the banner back.
+                            updateBannerHidden = info.version == dismissedUpdateVersion
+                        )
+                    }
+                }
             }
         }
+    }
+
+    // In memory only, so a dismissed banner comes back once the app is reopened (process restart).
+    private var dismissedUpdateVersion: String? = null
+
+    /** "Later" (✕) on the update banner: hides it for this version until the app is reopened or
+     * a newer version is released. The Settings icon keeps a small dot meanwhile. */
+    fun dismissUpdateBanner() {
+        dismissedUpdateVersion = pendingUpdate?.version
+        _uiState.update { it.copy(updateBannerHidden = true) }
     }
 
     fun downloadUpdate() {
@@ -242,8 +299,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Physical trigger, pressed: hold-to-scan (RFID) or arm the barcode decoder (Barcode) —
-     * whichever manager owns the trigger for the currently selected InputMode. Always restarts
-     * fresh when tags are already present, for RFID. */
+     * whichever manager owns the trigger for the currently selected InputMode. Restarts fresh
+     * when tags are already present, for RFID — via [requestNewScan], so unsent tags aren't
+     * silently dropped. */
     fun onTriggerPressed() {
         if (!canScanNow()) return
         if (_config.value.inputMode == InputMode.BARCODE) {
@@ -252,7 +310,63 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
         val s = _uiState.value
         if (s.scanning) return
-        if (s.tags.isEmpty()) toggleScan() else startNewScan()
+        if (collectedTagCount() == 0) toggleScan() else requestNewScan(fromTrigger = true)
+    }
+
+    // Not uiState.tags — that's only what the search filter currently shows.
+    private fun collectedTagCount(): Int = synchronized(tagMap) { tagMap.size }
+
+    /** New Scan button / trigger with tags present: starts fresh unless the tags on screen were
+     * never delivered — then the operator decides (send first, or discard) via the confirmation
+     * dialog. While a send is still in flight the request is ignored until its result is known. */
+    fun requestNewScan(fromTrigger: Boolean = false) {
+        val s = _uiState.value
+        val count = collectedTagCount()
+        when (newScanDecision(s.sendStatus, count)) {
+            NewScanDecision.START -> startNewScan()
+            NewScanDecision.IGNORE -> Unit
+            // Backgrounded (Background Scanning on): there's no screen to show the dialog on, so
+            // the trigger does nothing — the bubble already shows red for the failed send, and
+            // the operator gets the choice once they open the app and press again.
+            NewScanDecision.CONFIRM_DISCARD -> if (isAppVisible()) {
+                _uiState.update { it.copy(unsentTagsPrompt = UnsentTagsPrompt(count, fromTrigger)) }
+            }
+        }
+    }
+
+    /** "Send first" in the unsent-tags dialog — same as the Retry button; tags stay on screen. */
+    fun sendUnsentTagsFirst() {
+        dismissUnsentTagsPrompt()
+        retrySend()
+    }
+
+    /** "Discard & new scan" in the unsent-tags dialog — the operator's explicit choice. See
+     * [UnsentTagsPrompt.fromTrigger] for why the trigger case only clears. */
+    fun discardUnsentTags() {
+        val prompt = _uiState.value.unsentTagsPrompt ?: return
+        dismissUnsentTagsPrompt()
+        if (!prompt.fromTrigger) {
+            startNewScan()
+            return
+        }
+        clearTags()
+    }
+
+    /** Every path that empties the tag list goes through here, so a failed-send banner (and its
+     * Retry, which has nothing left to resend) can never linger over an empty list — e.g. when
+     * New Scan cleared the tags but the reader then failed to start. */
+    private fun clearTags() {
+        synchronized(tagMap) { tagMap.clear() }
+        sessionBaselineEpcs = emptySet()
+        publishTags()
+        if (_uiState.value.sendStatus is SendStatus.Error) {
+            _uiState.update { it.copy(sendStatus = SendStatus.Idle) }
+            ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+        }
+    }
+
+    fun dismissUnsentTagsPrompt() {
+        _uiState.update { it.copy(unsentTagsPrompt = null) }
     }
 
     /** Physical trigger, released: stop (mirrors the on-screen Stop Scan button in RFID mode). */
@@ -273,9 +387,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(barcodeScans = listOf(record) + it.barcodeScans) }
         if (_config.value.soundEnabled) playBeep()
         viewModelScope.launch(Dispatchers.IO) {
-            val error = api.sendCodes(_config.value, mapOf(code to TagQuality.STRONG.wireValue))
+            val config = _config.value
+            val request = api.codesRequest(config, mapOf(code to TagQuality.STRONG.wireValue))
+            val error = api.post(request)
             val newStatus = if (error == null) BarcodeSendStatus.SENT else BarcodeSendStatus.FAILED
-            configRepo.appendSendLog(SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK ($code)"))
+            logSend(SendContext.of(config, SendType.BARCODE, request.url, 1), request, error, "OK ($code)")
             _uiState.update { state ->
                 state.copy(barcodeScans = state.barcodeScans.map {
                     if (it === record) it.copy(status = newStatus) else it
@@ -289,8 +405,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
      * check (not Activity focus) is what actually enforces the setting. */
     private fun canScanNow(): Boolean {
         if (_config.value.backgroundScanEnabled) return true
-        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        return isAppVisible()
     }
+
+    private fun isAppVisible(): Boolean =
+        ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
     /** Clears previously collected tags, then starts a scan from scratch. */
     fun startNewScan() {
@@ -299,9 +418,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             transitioning.set(false)
             return
         }
-        synchronized(tagMap) { tagMap.clear() }
-        sessionBaselineEpcs = emptySet()
-        publishTags()
+        clearTags()
         beginInventory()
     }
 
@@ -377,14 +494,34 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Recreates the ToneGenerator only when the configured volume actually changes — not per
      * beep, which would reintroduce the exact scan-loop-style jank this app has already fixed
      * once before (constructing a ToneGenerator opens an audio track, not a cheap call). */
-    private fun playBeep() {
+    private fun playBeep() = playTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+
+    // Synchronized: tag-read beeps come from the reader's thread, send-result tones from IO.
+    @Synchronized
+    private fun playTone(tone: Int, durationMs: Int = -1) {
         val volume = _config.value.soundVolume.coerceIn(ScanConfig.MIN_VOLUME, ScanConfig.MAX_VOLUME)
         if (toneGenerator == null || toneGeneratorVolume != volume) {
             toneGenerator?.release()
             toneGeneratorVolume = volume
             toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, volume)
         }
-        toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+        toneGenerator?.startTone(tone, durationMs)
+    }
+
+    /** Send result the operator can tell without looking: the tone follows the Sound setting
+     * (on/off + volume); vibration is always on where the handheld has a motor. Runs whether or
+     * not the app is on screen — with Background Scanning on, the floating bubble's foreground
+     * service keeps both allowed. */
+    private fun signalSendResult(success: Boolean) {
+        SendFeedback.vibrate(getApplication(), success)
+        if (!_config.value.soundEnabled) return
+        val pattern = SendFeedback.toneFor(success)
+        viewModelScope.launch(Dispatchers.Default) {
+            repeat(pattern.repeats) { i ->
+                if (i > 0) delay(pattern.gapMs)
+                playTone(pattern.tone, pattern.durationMs)
+            }
+        }
     }
 
     private fun stopScanAndSend() {
@@ -440,21 +577,24 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Submits the replacement; [onResult] lets the caller show a one-shot success toast (same
-     * callback shape as testConnection/fetchDropdownData below) — failure is instead reflected
+     * callback shape the Settings screen's old connection test used) — failure is instead reflected
      * inline via the prompt's own [ReplacementPrompt.error], so the modal stays open with the
      * fields intact for a retry rather than needing the tag re-scanned. */
     fun submitReplacement(oldRfid: String, reason: ReplacementReason, onResult: (Boolean) -> Unit) {
         val prompt = _uiState.value.replacementPrompt ?: return
+        // The dialog already disables Submit in this case; this is the backstop, so factory_id = 0
+        // can never reach the server even from a config saved before Factory Code was validated.
+        if (_config.value.factoryId <= 0) return
         _uiState.update { it.copy(replacementPrompt = prompt.copy(submitting = true, error = null)) }
         viewModelScope.launch(Dispatchers.IO) {
-            val error = api.replaceRfid(_config.value, oldRfid, prompt.newRfid, reason.wireValue)
-            configRepo.appendSendLog(
-                SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK (replace ${prompt.newRfid})")
+            val config = _config.value
+            val request = api.replacementRequest(config, oldRfid, prompt.newRfid, reason.wireValue)
+            val error = api.post(request)
+            logSend(
+                SendContext.of(config, SendType.REPLACEMENT, request.url, 1), request, error,
+                "OK (replace ${prompt.newRfid})"
             )
-            if (error == null) {
-                synchronized(tagMap) { tagMap.clear() }
-                publishTags()
-            }
+            if (error == null) clearTags()
             _uiState.update {
                 it.copy(replacementPrompt = if (error == null) null else prompt.copy(submitting = false, error = error))
             }
@@ -465,8 +605,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Discards the scanned tag and closes the modal without submitting anything. */
     fun cancelReplacement() {
         _uiState.update { it.copy(replacementPrompt = null) }
-        synchronized(tagMap) { tagMap.clear() }
-        publishTags()
+        clearTags()
     }
 
     /** Local backup, independent of whether the API send below succeeds — best-effort, never
@@ -492,24 +631,81 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     fun retrySend() {
         if (_uiState.value.sendStatus !is SendStatus.Error) return
         val snapshot = synchronized(tagMap) { tagMap.values.toList() }
-        if (snapshot.isEmpty()) return
+        if (snapshot.isEmpty()) {
+            // Nothing left to resend — drop the stale error instead of a Retry that does nothing.
+            clearTags()
+            return
+        }
         _uiState.update { it.copy(sendStatus = SendStatus.Sending) }
         viewModelScope.launch(Dispatchers.IO) { sendSnapshot(snapshot) }
     }
 
     private suspend fun sendSnapshot(snapshot: List<TagRecord>) {
-        val error = api.sendTags(_config.value, snapshot)
+        val config = _config.value
+        val request = api.tagsRequest(config, snapshot)
+        val error = api.post(request)
         _uiState.update {
-            it.copy(sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error))
+            it.copy(
+                sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error, snapshot.size)
+            )
         }
-        configRepo.appendSendLog(
-            SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK (${snapshot.size} tag)")
+        logSend(
+            SendContext.of(config, SendType.RFID_BATCH, request.url, snapshot.size), request, error,
+            "OK (${snapshot.size} tag)"
         )
         ScanStateBus.update(
             if (error == null) ScanStateBus.BubbleState.SUCCESS else ScanStateBus.BubbleState.ERROR,
             snapshot.size
         )
     }
+
+    /** Every send (scan batch, barcode, replacement, or a resend from Log History) ends here: it's
+     * logged with its type, the config it went out under, and the exact body — so it can be shown
+     * and resent later regardless of what Settings say by then — and its result is signalled
+     * (vibration + tone, see [signalSendResult]). */
+    private fun logSend(
+        context: SendContext,
+        request: OutgoingRequest,
+        error: String?,
+        okDetail: String,
+        resendOf: Long? = null
+    ) {
+        signalSendResult(error == null)
+        configRepo.appendSendLog(
+            SendLogEntry(
+                timestamp = System.currentTimeMillis(),
+                success = error == null,
+                detail = error ?: okDetail,
+                id = UUID.randomUUID().toString(),
+                context = context,
+                resendOf = resendOf
+            ),
+            payload = request.body
+        )
+    }
+
+    /** Resends a Log History entry exactly as it went out — its stored body (plus resend markers,
+     * see [markAsResend]) to its stored URL, not rebuilt from the current Settings. The result is
+     * logged as a new entry pointing back at [entry]. [onResult] reports success. */
+    fun resendLogEntry(entry: SendLogEntry, onResult: (Boolean) -> Unit) {
+        val context = entry.context
+        val id = entry.id
+        if (!entry.canResend || context == null || id == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val body = configRepo.sendLogPayload(id)
+            val success = if (body == null) {
+                false
+            } else {
+                val request = OutgoingRequest(context.url, markAsResend(body, entry.timestamp))
+                val error = api.post(request)
+                logSend(context, request, error, "OK (resend)", resendOf = entry.timestamp)
+                error == null
+            }
+            withContext(Dispatchers.Main) { onResult(success) }
+        }
+    }
+
+    fun sendLogPayload(entry: SendLogEntry): String? = entry.id?.let(configRepo::sendLogPayload)
 
     fun setSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
@@ -526,7 +722,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(
                 tags = applySortAndFilter(snapshot, it.sortOption, it.searchQuery),
-                totalReads = snapshot.sumOf { t -> t.readCount }
+                totalReads = snapshot.sumOf { t -> t.readCount },
+                uniqueCount = snapshot.size
             )
         }
     }
@@ -597,29 +794,41 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
      * whatever generalized message the Scan screen showed at the time. */
     fun sendLog(): List<SendLogEntry> = configRepo.sendLog()
 
-    /** Fetches RR Type and Factory Code lists from [baseUrl] and caches whichever succeed.
-     * [onResult] reports true only if both fetches succeeded. */
-    fun fetchDropdownData(baseUrl: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val rrTypes = api.fetchRrTypes(baseUrl)
-            val factoryCodes = api.fetchFactoryCodes(baseUrl)
-            rrTypes?.let(configRepo::saveRrTypeOptions)
-            factoryCodes?.let(configRepo::saveFactoryCodeOptions)
-            withContext(Dispatchers.Main) { onResult(rrTypes != null && factoryCodes != null) }
+    /** Fetches RR Type and Factory Code lists from [baseUrl], cancelling any fetch still in flight
+     * so a slow response from a previous Base URL can never land on top of this one. The cache is
+     * only overwritten when both lists succeed — a half-success would leave the two dropdowns
+     * holding data from different servers. On failure the old cache is kept as-is. */
+    fun fetchDropdownData(baseUrl: String) {
+        dropdownFetchJob?.cancel()
+        _dropdownFetch.value = DropdownFetchState.Loading(baseUrl)
+        dropdownFetchJob = viewModelScope.launch {
+            // Launched on Main, so cancel() (also called from Main) either lands before
+            // withContext resumes — which then throws instead of returning — or after this whole
+            // block already finished; a stale result can't slip in between.
+            val (rrTypes, factoryCodes) = withContext(Dispatchers.IO) {
+                api.fetchRrTypes(baseUrl) to api.fetchFactoryCodes(baseUrl)
+            }
+            _dropdownFetch.value = if (rrTypes != null && factoryCodes != null) {
+                configRepo.saveRrTypeOptions(rrTypes)
+                configRepo.saveFactoryCodeOptions(factoryCodes)
+                DropdownFetchState.Success(baseUrl, rrTypes, factoryCodes)
+            } else {
+                val hasCache = configRepo.rrTypeOptions().isNotEmpty() || configRepo.factoryCodeOptions().isNotEmpty()
+                DropdownFetchState.Failed(baseUrl, hasStaleCache = hasCache)
+            }
         }
+    }
+
+    fun cancelDropdownFetch() {
+        dropdownFetchJob?.cancel()
+        dropdownFetchJob = null
+        _dropdownFetch.value = DropdownFetchState.Idle
     }
 
     fun resetConfig(): ScanConfig {
         val defaults = configRepo.reset()
         _config.value = defaults
         return defaults
-    }
-
-    fun testConnection(apiUrl: String, onResult: (String?) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val error = api.testConnection(apiUrl)
-            withContext(Dispatchers.Main) { onResult(error) }
-        }
     }
 
     override fun onCleared() {

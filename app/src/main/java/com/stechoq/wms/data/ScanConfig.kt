@@ -56,7 +56,41 @@ data class ScanConfig(
         val ENDPOINT_OPTIONS = listOf(
             "/api/v1/warehouse-management/jmp/log-rfids/components/handheld"
         )
-        val INITIAL_YEAR_OPTIONS = (2000..2026).map { it.toString() }
+        const val FIRST_INITIAL_YEAR = 2000
+
+        /** [FIRST_INITIAL_YEAR] up to [currentYear] (the device clock's year by default) — computed
+         * rather than a fixed range, so the dropdown keeps including the current year, which is
+         * also what [initialYear] defaults to. */
+        fun initialYearOptions(currentYear: Int = Calendar.getInstance().get(Calendar.YEAR)): List<String> =
+            (FIRST_INITIAL_YEAR..currentYear).map { it.toString() }
+
+        /** Whether [url] is complete enough to be worth fetching from — a scheme alone ("http://",
+         * mid-typing) would otherwise fire a request at an empty host. */
+        fun isFetchableBaseUrl(url: String): Boolean =
+            listOf("http://", "https://").any { url.startsWith(it) && url.length > it.length }
+
+        /** Short server label for the Scan screen's config chips: "https://wms.suite.stechoq-j.com"
+         * → "wms.suite"; an IP address (or a bare hostname) is kept whole, with its port. */
+        fun serverShortName(baseUrl: String): String {
+            val hostPort = baseUrl.trim().substringAfter("://").substringBefore('/')
+            if (hostPort.isBlank()) return ""
+            val host = hostPort.substringBefore(':')
+            val labels = host.split('.')
+            val isIp = labels.size == 4 && labels.all { it.toIntOrNull() != null }
+            return if (isIp || labels.size < 3) hostPort else labels.take(2).joinToString(".")
+        }
+    }
+
+    /** Drops an rrType/factoryCode the freshly fetched lists don't contain — so a selection made
+     * against one server can't ride along to another — and re-syncs factoryId to the matching
+     * entry, since the same code can carry a different id on a different server. */
+    fun keepingOnlyAvailable(rrTypes: List<String>, factoryCodes: List<FactoryCodeOption>): ScanConfig {
+        val factory = factoryCodes.find { it.code == factoryCode }
+        return copy(
+            rrType = rrType.takeIf { it in rrTypes } ?: "",
+            factoryCode = factory?.code ?: "",
+            factoryId = factory?.id ?: 0
+        )
     }
 
     /** Combines baseUrl + endpoint into the full request URL, regardless of slashes on either side. */
@@ -65,6 +99,10 @@ data class ScanConfig(
         val path = endpoint.trim().trim('/')
         return if (path.isEmpty()) base else "$base/$path"
     }
+
+    /** Replacement only takes effect in Register mode — the checkbox is hidden in WO, but its saved
+     * value isn't cleared, so the flag alone doesn't mean replacement is actually in use. */
+    val replacementActive: Boolean get() = mode == ScanMode.REGISTER && replacementModeEnabled
 
     /** Field name -> error type, empty when the config is valid. Display text lives in AppStrings.
      * [powerRange] comes from the active RfidReaderManager — it's device-specific (Chainway 1-30
@@ -79,6 +117,11 @@ data class ScanConfig(
         if (rrType.isBlank()) errors["rrType"] = ValidationErrorType.RR_TYPE_REQUIRED
         if (makerName.isBlank()) errors["makerName"] = ValidationErrorType.MAKER_NAME_REQUIRED
         if (initialYear.toIntOrNull() == null) errors["initialYear"] = ValidationErrorType.INITIAL_YEAR_NUMBER
+        if (factoryCode.isBlank()) {
+            errors["factoryCode"] = ValidationErrorType.FACTORY_CODE_REQUIRED
+        } else if (replacementActive && factoryId <= 0) {
+            errors["factoryCode"] = ValidationErrorType.FACTORY_ID_MISSING
+        }
         if (power !in powerRange) {
             errors["power"] = ValidationErrorType.POWER_RANGE
         }
