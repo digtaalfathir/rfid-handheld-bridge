@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -65,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -76,7 +78,9 @@ import com.stechoq.wms.data.FactoryCodeOption
 import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ScanConfig
 import com.stechoq.wms.data.ScanMode
+import com.stechoq.wms.data.SendContext
 import com.stechoq.wms.data.SendLogEntry
+import com.stechoq.wms.data.SendType
 import com.stechoq.wms.data.ValidationErrorType
 import com.stechoq.wms.ui.theme.BarcodeAccent
 import com.stechoq.wms.ui.theme.ErrorRed
@@ -438,7 +442,7 @@ fun SettingsScreen(
             }
 
             if (showLogHistory) {
-                LogHistoryDialog(entries = viewModel.sendLog(), onDismiss = { showLogHistory = false })
+                LogHistoryDialog(viewModel = viewModel, onDismiss = { showLogHistory = false })
             }
 
             Spacer(Modifier.height(20.dp))
@@ -658,12 +662,22 @@ private fun SelectOnlyDropdownField(label: String, value: String, options: List<
     }
 }
 
+// Long batch payloads are cut off on screen — the stored body (and what a resend posts) is whole.
+private const val LOG_PAYLOAD_DISPLAY_LIMIT = 2000
+
 /** The full/raw detail behind whatever generalized message the Scan screen showed at the time —
- * so a system-error banner ("contact WMS Team") doesn't leave the actual cause unrecoverable. */
+ * so a system-error banner ("contact WMS Team") doesn't leave the actual cause unrecoverable —
+ * plus what each send was (type, config, exact payload) and a way to resend it as it went out. */
 @Composable
-private fun LogHistoryDialog(entries: List<SendLogEntry>, onDismiss: () -> Unit) {
+private fun LogHistoryDialog(viewModel: ScanViewModel, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     val strings = LocalStrings.current
     val timeFormat = remember { SimpleDateFormat("dd/MM HH:mm:ss", Locale.US) }
+    var entries by remember { mutableStateOf(viewModel.sendLog()) }
+    var expanded by remember { mutableStateOf(emptySet<SendLogEntry>()) }
+    var confirming by remember { mutableStateOf<SendLogEntry?>(null) }
+    var resending by remember { mutableStateOf<SendLogEntry?>(null) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.logHistoryTitle) },
@@ -678,21 +692,16 @@ private fun LogHistoryDialog(entries: List<SendLogEntry>, onDismiss: () -> Unit)
                         .verticalScroll(rememberScrollState())
                 ) {
                     entries.forEachIndexed { index, entry ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                if (entry.success) strings.logHistorySuccessLabel else strings.logHistoryFailedLabel,
-                                color = if (entry.success) SuccessGreen else ErrorRed,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                timeFormat.format(Date(entry.timestamp)),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(entry.detail, style = MaterialTheme.typography.bodySmall)
+                        LogEntryItem(
+                            entry = entry,
+                            timeFormat = timeFormat,
+                            expanded = entry in expanded,
+                            payload = { viewModel.sendLogPayload(entry) },
+                            resending = resending == entry,
+                            resendEnabled = resending == null,
+                            onToggle = { expanded = if (entry in expanded) expanded - entry else expanded + entry },
+                            onResend = { confirming = entry }
+                        )
                         if (index != entries.lastIndex) Spacer(Modifier.height(12.dp))
                     }
                 }
@@ -701,5 +710,157 @@ private fun LogHistoryDialog(entries: List<SendLogEntry>, onDismiss: () -> Unit)
         confirmButton = {
             TextButton(onClick = onDismiss) { Text(strings.close) }
         }
+    )
+
+    confirming?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { confirming = null },
+            title = { Text(strings.logResendConfirmTitle) },
+            text = {
+                Column {
+                    Text(strings.logResendConfirmMessage, style = MaterialTheme.typography.bodyMedium)
+                    Text(entry.context?.url.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    if (entry.success) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(strings.logResendDuplicateWarning, style = MaterialTheme.typography.bodySmall, color = ErrorRed)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    confirming = null
+                    resending = entry
+                    viewModel.resendLogEntry(entry) { success ->
+                        resending = null
+                        entries = viewModel.sendLog()
+                        val message = if (success) strings.logResendSuccessToast else strings.logResendFailedToast
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text(strings.logResend) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = null }) { Text(strings.cancel) }
+            }
+        )
+    }
+}
+
+@Composable
+private fun LogEntryItem(
+    entry: SendLogEntry,
+    timeFormat: SimpleDateFormat,
+    expanded: Boolean,
+    payload: () -> String?,
+    resending: Boolean,
+    resendEnabled: Boolean,
+    onToggle: () -> Unit,
+    onResend: () -> Unit
+) {
+    val strings = LocalStrings.current
+    val context = entry.context
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (context != null) {
+                Text(
+                    strings.logBadge(context),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (context.type == SendType.BARCODE) BarcodeAccent else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                if (entry.success) strings.logHistorySuccessLabel else strings.logHistoryFailedLabel,
+                color = if (entry.success) SuccessGreen else ErrorRed,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Text(
+            listOfNotNull(timeFormat.format(Date(entry.timestamp)), context?.let(strings::logItemCount)).joinToString(" · "),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        entry.resendOf?.let {
+            Text(
+                "${strings.logResentFromPrefix}${timeFormat.format(Date(it))}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // if/else rather than an early return@Column: returning early out of an inline composable
+        // lambda corrupts Compose's slot table on this compiler version (crash on open).
+        if (context == null) {
+            // Logged before type/config/payload were recorded — show the raw detail as before.
+            Text(entry.detail, style = MaterialTheme.typography.bodySmall)
+        } else {
+            LogEntryDetails(entry, context, expanded, payload, resending, resendEnabled, onToggle, onResend)
+        }
+    }
+}
+
+@Composable
+private fun LogEntryDetails(
+    entry: SendLogEntry,
+    context: SendContext,
+    expanded: Boolean,
+    payload: () -> String?,
+    resending: Boolean,
+    resendEnabled: Boolean,
+    onToggle: () -> Unit,
+    onResend: () -> Unit
+) {
+    val strings = LocalStrings.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onToggle, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
+                Text(if (expanded) strings.logHideDetails else strings.logShowDetails, style = MaterialTheme.typography.labelMedium)
+            }
+            Spacer(Modifier.weight(1f))
+            if (entry.canResend) {
+                OutlinedButton(
+                    onClick = onResend,
+                    enabled = resendEnabled,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    if (resending) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(strings.logResend, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        if (expanded) {
+            val body = remember(entry) { payload() }
+            if (context.type != SendType.REPLACEMENT) {
+                LogDetailLine(strings.factoryCodeLabel, context.factoryCode)
+                LogDetailLine(strings.rrTypeLabel, context.rrType)
+            }
+            LogDetailLine(strings.logUrlLabel, context.url)
+            LogDetailLine(strings.logResponseLabel, entry.detail)
+            if (body != null) {
+                val shown = if (body.length > LOG_PAYLOAD_DISPLAY_LIMIT) body.take(LOG_PAYLOAD_DISPLAY_LIMIT) + "…" else body
+                LogDetailLine(strings.logPayloadLabel, shown, monospace = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogDetailLine(label: String, value: String, monospace: Boolean = false) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp)
+    )
+    Text(
+        value.ifBlank { "-" },
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = if (monospace) FontFamily.Monospace else null
     )
 }
