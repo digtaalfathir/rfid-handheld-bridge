@@ -143,7 +143,7 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 SummaryCard(
                     state = state,
                     onToggleScan = { viewModel.toggleScan() },
-                    onStartNew = { viewModel.startNewScan() },
+                    onStartNew = { viewModel.requestNewScan() },
                     onRetrySend = { viewModel.retrySend() }
                 )
 
@@ -194,6 +194,15 @@ fun ScanScreen(viewModel: ScanViewModel, onOpenSettings: () -> Unit) {
                 }
             },
             onCancel = { viewModel.cancelReplacement() }
+        )
+    }
+
+    state.unsentTagsPrompt?.let { prompt ->
+        UnsentTagsDialog(
+            count = prompt.count,
+            onSendFirst = { viewModel.sendUnsentTagsFirst() },
+            onDiscard = { viewModel.discardUnsentTags() },
+            onCancel = { viewModel.dismissUnsentTagsPrompt() }
         )
     }
 }
@@ -343,7 +352,9 @@ private fun SummaryCard(
                 else -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = onStartNew,
-                        enabled = state.readerConnected,
+                        // Not while a send is in flight — clearing then would lose the tags if
+                        // that send turns out to fail.
+                        enabled = state.readerConnected && state.sendStatus !is SendStatus.Sending,
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f).height(48.dp)
                     ) {
@@ -464,6 +475,27 @@ private fun SendStatusBanner(status: SendStatus, onRetry: () -> Unit) {
         }
         SendStatus.Idle -> {}
     }
+}
+
+/** Shown when a New Scan (button or trigger) would clear tags whose last send failed — the only
+ * other copy of them is the CSV backup, which can't be resent from inside the app. */
+@Composable
+private fun UnsentTagsDialog(count: Int, onSendFirst: () -> Unit, onDiscard: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.unsentTagsTitle, fontWeight = FontWeight.SemiBold) },
+        text = { Text(strings.unsentTagsMessage(count)) },
+        confirmButton = {
+            Button(onClick = onSendFirst) { Text(strings.unsentTagsSendFirst) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onCancel) { Text(strings.cancel) }
+                TextButton(onClick = onDiscard) { Text(strings.unsentTagsDiscard, color = ErrorRed) }
+            }
+        }
+    )
 }
 
 /** Register + Replacement mode's mid-scan modal — appears the instant one tag is detected.
