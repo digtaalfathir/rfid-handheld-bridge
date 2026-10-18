@@ -38,6 +38,34 @@ class ScanConfigTest {
         assertEquals(382, result.factoryId)
     }
 
+    private val validConfig = ScanConfig(
+        baseUrl = "https://wms.suite.stechoq-j.com",
+        makerName = "Acme",
+        factoryCode = "FAC1",
+        factoryId = 382
+    )
+
+    @Test
+    fun validConfigPasses() {
+        assertTrue(validConfig.validate().isEmpty())
+    }
+
+    @Test
+    fun blankFactoryCodeIsRejected() {
+        val errors = validConfig.copy(factoryCode = "", factoryId = 0).validate()
+        assertEquals(ValidationErrorType.FACTORY_CODE_REQUIRED, errors["factoryCode"])
+    }
+
+    @Test
+    fun missingFactoryIdIsRejectedOnlyWhenReplacementIsActive() {
+        val noId = validConfig.copy(factoryId = 0)
+        assertTrue(noId.validate().isEmpty())
+        val replacement = noId.copy(mode = ScanMode.REGISTER, replacementModeEnabled = true)
+        assertEquals(ValidationErrorType.FACTORY_ID_MISSING, replacement.validate()["factoryCode"])
+        // Replacement left ticked but switched to WO isn't in effect, so it can't block Save.
+        assertTrue(replacement.copy(mode = ScanMode.WO).validate().isEmpty())
+    }
+
     @Test
     fun fetchableBaseUrlNeedsSchemeAndHost() {
         assertTrue(ScanConfig.isFetchableBaseUrl("https://wms.suite.stechoq-j.com"))

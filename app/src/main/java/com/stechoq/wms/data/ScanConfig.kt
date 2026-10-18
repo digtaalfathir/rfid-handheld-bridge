@@ -89,6 +89,10 @@ data class ScanConfig(
         return if (path.isEmpty()) base else "$base/$path"
     }
 
+    /** Replacement only takes effect in Register mode — the checkbox is hidden in WO, but its saved
+     * value isn't cleared, so the flag alone doesn't mean replacement is actually in use. */
+    val replacementActive: Boolean get() = mode == ScanMode.REGISTER && replacementModeEnabled
+
     /** Field name -> error type, empty when the config is valid. Display text lives in AppStrings.
      * [powerRange] comes from the active RfidReaderManager — it's device-specific (Chainway 1-30
      * dBm, Zebra 0-300), not a fixed constant. */
@@ -102,6 +106,11 @@ data class ScanConfig(
         if (rrType.isBlank()) errors["rrType"] = ValidationErrorType.RR_TYPE_REQUIRED
         if (makerName.isBlank()) errors["makerName"] = ValidationErrorType.MAKER_NAME_REQUIRED
         if (initialYear.toIntOrNull() == null) errors["initialYear"] = ValidationErrorType.INITIAL_YEAR_NUMBER
+        if (factoryCode.isBlank()) {
+            errors["factoryCode"] = ValidationErrorType.FACTORY_CODE_REQUIRED
+        } else if (replacementActive && factoryId <= 0) {
+            errors["factoryCode"] = ValidationErrorType.FACTORY_ID_MISSING
+        }
         if (power !in powerRange) {
             errors["power"] = ValidationErrorType.POWER_RANGE
         }
