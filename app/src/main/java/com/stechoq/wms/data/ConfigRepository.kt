@@ -182,7 +182,7 @@ class ConfigRepository(context: Context) {
         (ScanConfig.ENDPOINT_OPTIONS + customOptions("custom_endpoint_options")).distinct()
 
     fun initialYearOptions(): List<String> =
-        (ScanConfig.INITIAL_YEAR_OPTIONS + customOptions("custom_initial_year_options")).distinct()
+        (ScanConfig.initialYearOptions() + customOptions("custom_initial_year_options")).distinct()
 
     fun rememberCustomAntenna(value: String) = addCustomOption("custom_antenna_options", value)
 
