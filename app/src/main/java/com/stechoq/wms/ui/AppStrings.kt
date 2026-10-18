@@ -6,6 +6,8 @@ import com.stechoq.wms.data.AppLanguage
 import com.stechoq.wms.data.DeviceType
 import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ReplacementReason
+import com.stechoq.wms.data.SendContext
+import com.stechoq.wms.data.SendType
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.ValidationErrorType
 
@@ -135,6 +137,23 @@ data class AppStrings(
     val logHistoryEmpty: String,
     val logHistorySuccessLabel: String,
     val logHistoryFailedLabel: String,
+    val logTypeRfid: String,
+    val logTypeBarcode: String,
+    val logTypeReplacement: String,
+    val logOpname: String,
+    val logCodeWord: String,
+    val logShowDetails: String,
+    val logHideDetails: String,
+    val logUrlLabel: String,
+    val logPayloadLabel: String,
+    val logResponseLabel: String,
+    val logResentFromPrefix: String,
+    val logResend: String,
+    val logResendConfirmTitle: String,
+    val logResendConfirmMessage: String,
+    val logResendDuplicateWarning: String,
+    val logResendSuccessToast: String,
+    val logResendFailedToast: String,
     val close: String,
 
     // Validation errors
@@ -182,6 +201,19 @@ data class AppStrings(
         TagQuality.MEDIUM -> qualityMedium
         TagQuality.WEAK -> qualityWeak
     }
+
+    /** Log History badge, e.g. "RFID · Register · Opname", "Barcode · WO", "Replacement". */
+    fun logBadge(context: SendContext): String = when (context.type) {
+        SendType.REPLACEMENT -> logTypeReplacement
+        SendType.RFID_BATCH, SendType.BARCODE -> listOfNotNull(
+            if (context.type == SendType.RFID_BATCH) logTypeRfid else logTypeBarcode,
+            context.mode.label,
+            logOpname.takeIf { context.opname }
+        ).joinToString(" · ")
+    }
+
+    fun logItemCount(context: SendContext): String =
+        "${context.itemCount} ${if (context.type == SendType.BARCODE) logCodeWord else tagWord}"
 
     fun scanModeLabel(mode: InputMode): String = when (mode) {
         InputMode.RFID -> scanModeRfidLabel
@@ -320,6 +352,23 @@ val EnglishStrings = AppStrings(
     logHistoryEmpty = "No send attempts logged yet",
     logHistorySuccessLabel = "Sent",
     logHistoryFailedLabel = "Failed",
+    logTypeRfid = "RFID",
+    logTypeBarcode = "Barcode",
+    logTypeReplacement = "Replacement",
+    logOpname = "Opname",
+    logCodeWord = "codes",
+    logShowDetails = "Details",
+    logHideDetails = "Hide details",
+    logUrlLabel = "URL",
+    logPayloadLabel = "Payload",
+    logResponseLabel = "Result",
+    logResentFromPrefix = "Resent from ",
+    logResend = "Resend",
+    logResendConfirmTitle = "Resend this data?",
+    logResendConfirmMessage = "The original data will be sent again, unchanged, to:",
+    logResendDuplicateWarning = "This data was already sent successfully. Sending it again may record it twice on the server.",
+    logResendSuccessToast = "Resent successfully",
+    logResendFailedToast = "Resend failed — see the newest log entry",
     close = "Close",
 
     errorBaseUrlFormat = "Base URL must start with http:// or https://",
@@ -450,6 +499,23 @@ val IndonesianStrings = AppStrings(
     logHistoryEmpty = "Belum ada riwayat pengiriman",
     logHistorySuccessLabel = "Terkirim",
     logHistoryFailedLabel = "Gagal",
+    logTypeRfid = "RFID",
+    logTypeBarcode = "Barcode",
+    logTypeReplacement = "Penggantian",
+    logOpname = "Opname",
+    logCodeWord = "kode",
+    logShowDetails = "Detail",
+    logHideDetails = "Tutup detail",
+    logUrlLabel = "URL",
+    logPayloadLabel = "Payload",
+    logResponseLabel = "Hasil",
+    logResentFromPrefix = "Kirim ulang dari ",
+    logResend = "Kirim ulang",
+    logResendConfirmTitle = "Kirim ulang data ini?",
+    logResendConfirmMessage = "Data asli akan dikirim lagi, tanpa diubah, ke:",
+    logResendDuplicateWarning = "Data ini sudah pernah berhasil terkirim. Mengirim lagi bisa membuat data tercatat dua kali di server.",
+    logResendSuccessToast = "Kirim ulang berhasil",
+    logResendFailedToast = "Kirim ulang gagal — lihat entri log paling atas",
     close = "Tutup",
 
     errorBaseUrlFormat = "Base URL harus diawali http:// atau https://",

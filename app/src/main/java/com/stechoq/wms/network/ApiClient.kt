@@ -17,6 +17,9 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
+/** A JSON POST about to go out — its exact url and body. */
+data class OutgoingRequest(val url: String, val body: String)
+
 class ApiClient {
 
     // Bumped from 10s/5s after a real incident: slow warehouse WiFi meant a send actually
@@ -27,19 +30,24 @@ class ApiClient {
         .connectTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    /** Returns null on success, or a human-readable reason on failure. */
-    fun sendTags(config: ScanConfig, tags: List<TagRecord>): String? =
-        sendCodes(config, tags.associate { it.epc to TagQuality.from(it.rssi, it.readCount).wireValue })
+    // Requests are built apart from [post] so the exact url + body that went out can also be kept
+    // in Settings' log history — shown there, and resendable as-is.
 
-    /** Same payload shape as [sendTags]. [codes] maps each code to its quality wire value — for
+    fun tagsRequest(config: ScanConfig, tags: List<TagRecord>): OutgoingRequest =
+        codesRequest(config, tags.associate { it.epc to TagQuality.from(it.rssi, it.readCount).wireValue })
+
+    /** Same payload shape as [tagsRequest]. [codes] maps each code to its quality wire value — for
      * callers without a real RSSI-based quality (e.g. a single barcode scan, sent immediately
      * rather than batched like RFID's tag list), STRONG is the reasonable default: a successful
      * decode is a certain read, not a marginal one the way a weak RF signal is. */
-    fun sendCodes(config: ScanConfig, codes: Map<String, String>): String? {
+    fun codesRequest(config: ScanConfig, codes: Map<String, String>): OutgoingRequest =
+        OutgoingRequest(config.fullApiUrl(), buildPayload(config, codes, isoNow()).toString())
+
+    /** Returns null on success, or a human-readable reason on failure. */
+    fun post(outgoing: OutgoingRequest): String? {
         return try {
-            val payload = buildPayload(config, codes, isoNow())
-            val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val request = Request.Builder().url(config.fullApiUrl()).post(body).build()
+            val body = outgoing.body.toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder().url(outgoing.url).post(body).build()
 
             client.newCall(request).execute().use { resp ->
                 // Full, untruncated body: the caller both parses it as JSON for a clean on-screen
@@ -56,25 +64,16 @@ class ApiClient {
 
     /** Registers a physical tag swap — [oldRfid] (typed manually, since that tag is assumed
      * damaged/unreadable) gets replaced server-side by [newRfid] (whatever was just scanned).
-     * Same null-on-success/raw-detail-on-failure shape as [sendCodes], so it flows through the
-     * same on-screen formatting and Settings log history. */
-    fun replaceRfid(config: ScanConfig, oldRfid: String, newRfid: String, remark: String): String? {
-        return try {
-            val payload = JSONObject().apply {
-                put("old_rfid_number", oldRfid)
-                put("new_rfid_number", newRfid)
-                put("replacement_remark", remark)
-                put("factory_id", config.factoryId)
-            }
-            val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val url = config.baseUrl.trimEnd('/') + REPLACE_RFID_PATH
-            val request = Request.Builder().url(url).post(body).build()
-            client.newCall(request).execute().use { resp ->
-                if (resp.isSuccessful) null else "HTTP ${resp.code} ${resp.body?.string().orEmpty()}"
-            }
-        } catch (e: Exception) {
-            e.message ?: e.javaClass.simpleName
+     * Sent through the same [post] as scans, so it flows through the same on-screen formatting
+     * and Settings log history. */
+    fun replacementRequest(config: ScanConfig, oldRfid: String, newRfid: String, remark: String): OutgoingRequest {
+        val payload = JSONObject().apply {
+            put("old_rfid_number", oldRfid)
+            put("new_rfid_number", newRfid)
+            put("replacement_remark", remark)
+            put("factory_id", config.factoryId)
         }
+        return OutgoingRequest(config.baseUrl.trimEnd('/') + REPLACE_RFID_PATH, payload.toString())
     }
 
     // Path is fixed and not user-facing — a settings-screen convenience, not something an

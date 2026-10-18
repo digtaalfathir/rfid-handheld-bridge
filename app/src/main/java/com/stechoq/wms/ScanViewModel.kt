@@ -21,13 +21,17 @@ import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ReplacementReason
 import com.stechoq.wms.data.ScanConfig
 import com.stechoq.wms.data.ScanMode
+import com.stechoq.wms.data.SendContext
 import com.stechoq.wms.data.SendLogEntry
+import com.stechoq.wms.data.SendType
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
 import com.stechoq.wms.data.ValidationErrorType
 import com.stechoq.wms.network.ApiClient
+import com.stechoq.wms.network.OutgoingRequest
 import com.stechoq.wms.network.UpdateClient
 import com.stechoq.wms.network.UpdateInfo
+import com.stechoq.wms.network.markAsResend
 import com.stechoq.wms.rfid.ChainwayReaderManager
 import com.stechoq.wms.rfid.RfidReaderManager
 import com.stechoq.wms.rfid.ZebraReaderManager
@@ -46,6 +50,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val UI_REFRESH_INTERVAL_MS = 200L
@@ -339,9 +344,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(barcodeScans = listOf(record) + it.barcodeScans) }
         if (_config.value.soundEnabled) playBeep()
         viewModelScope.launch(Dispatchers.IO) {
-            val error = api.sendCodes(_config.value, mapOf(code to TagQuality.STRONG.wireValue))
+            val config = _config.value
+            val request = api.codesRequest(config, mapOf(code to TagQuality.STRONG.wireValue))
+            val error = api.post(request)
             val newStatus = if (error == null) BarcodeSendStatus.SENT else BarcodeSendStatus.FAILED
-            configRepo.appendSendLog(SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK ($code)"))
+            logSend(SendContext.of(config, SendType.BARCODE, request.url, 1), request, error, "OK ($code)")
             _uiState.update { state ->
                 state.copy(barcodeScans = state.barcodeScans.map {
                     if (it === record) it.copy(status = newStatus) else it
@@ -519,9 +526,12 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         if (_config.value.factoryId <= 0) return
         _uiState.update { it.copy(replacementPrompt = prompt.copy(submitting = true, error = null)) }
         viewModelScope.launch(Dispatchers.IO) {
-            val error = api.replaceRfid(_config.value, oldRfid, prompt.newRfid, reason.wireValue)
-            configRepo.appendSendLog(
-                SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK (replace ${prompt.newRfid})")
+            val config = _config.value
+            val request = api.replacementRequest(config, oldRfid, prompt.newRfid, reason.wireValue)
+            val error = api.post(request)
+            logSend(
+                SendContext.of(config, SendType.REPLACEMENT, request.url, 1), request, error,
+                "OK (replace ${prompt.newRfid})"
             )
             if (error == null) {
                 synchronized(tagMap) { tagMap.clear() }
@@ -570,18 +580,67 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun sendSnapshot(snapshot: List<TagRecord>) {
-        val error = api.sendTags(_config.value, snapshot)
+        val config = _config.value
+        val request = api.tagsRequest(config, snapshot)
+        val error = api.post(request)
         _uiState.update {
             it.copy(sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error))
         }
-        configRepo.appendSendLog(
-            SendLogEntry(System.currentTimeMillis(), error == null, error ?: "OK (${snapshot.size} tag)")
+        logSend(
+            SendContext.of(config, SendType.RFID_BATCH, request.url, snapshot.size), request, error,
+            "OK (${snapshot.size} tag)"
         )
         ScanStateBus.update(
             if (error == null) ScanStateBus.BubbleState.SUCCESS else ScanStateBus.BubbleState.ERROR,
             snapshot.size
         )
     }
+
+    /** Every send (scan batch, barcode, replacement, or a resend from Log History) is logged with
+     * its type, the config it went out under, and the exact body — so it can be shown and resent
+     * later regardless of what Settings say by then. */
+    private fun logSend(
+        context: SendContext,
+        request: OutgoingRequest,
+        error: String?,
+        okDetail: String,
+        resendOf: Long? = null
+    ) {
+        configRepo.appendSendLog(
+            SendLogEntry(
+                timestamp = System.currentTimeMillis(),
+                success = error == null,
+                detail = error ?: okDetail,
+                id = UUID.randomUUID().toString(),
+                context = context,
+                resendOf = resendOf
+            ),
+            payload = request.body
+        )
+    }
+
+    /** Resends a Log History entry exactly as it went out — its stored body (plus resend markers,
+     * see [markAsResend]) to its stored URL, not rebuilt from the current Settings. The result is
+     * logged as a new entry pointing back at [entry]. [onResult] reports success. */
+    fun resendLogEntry(entry: SendLogEntry, onResult: (Boolean) -> Unit) {
+        val context = entry.context
+        val id = entry.id
+        if (!entry.canResend || context == null || id == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val body = configRepo.sendLogPayload(id)
+            val success = if (body == null) {
+                false
+            } else {
+                val request = OutgoingRequest(context.url, markAsResend(body, entry.timestamp))
+                val error = api.post(request)
+                logSend(context, request, error, "OK (resend)", resendOf = entry.timestamp)
+                error == null
+            }
+            withContext(Dispatchers.Main) { onResult(success) }
+        }
+    }
+
+    fun sendLogPayload(entry: SendLogEntry): String? = entry.id?.let(configRepo::sendLogPayload)
 
     fun setSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
