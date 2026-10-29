@@ -76,7 +76,8 @@ sealed class SendStatus {
     // Raw, unlocalized detail (HTTP status + body, or an exception message) — the UI layer turns
     // this into a display message via formatSendError(), same as every other localized string
     // here coming from AppStrings rather than the ViewModel.
-    data class Error(val message: String) : SendStatus()
+    // [unsentCount]: how many tags that failed send carried — shown in the error banner.
+    data class Error(val message: String, val unsentCount: Int) : SendStatus()
 }
 
 /** State for the "replace a damaged tag" modal — shown mid-scan (Register mode + Replacement
@@ -116,12 +117,18 @@ data class ScanUiState(
     val scanning: Boolean = false,
     val tags: List<TagRecord> = emptyList(),
     val totalReads: Int = 0,
+    // Every collected tag, regardless of the search filter — [tags] is what's visible after it.
+    val uniqueCount: Int = 0,
     val lastScanTime: Long? = null,
     val sendStatus: SendStatus = SendStatus.Idle,
     val scanStartError: String? = null,
     val searchQuery: String = "",
     val sortOption: SortOption = SortOption.LAST_SEEN_DESC,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
+    val updateBannerHidden: Boolean = false,
+    // Newest release found on GitHub when it differs from this build — kept through
+    // download/install, unlike UpdateStatus.Available which those states replace.
+    val newerVersion: String? = null,
     val barcodeScans: List<BarcodeScanRecord> = emptyList(),
     val replacementPrompt: ReplacementPrompt? = null,
     // Non-null while the "unsent tags" confirmation is showing.
@@ -201,10 +208,34 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 null
             } ?: return@launch
             if (info.version.isNotBlank() && info.version != BuildConfig.VERSION_NAME) {
-                pendingUpdate = info
-                _uiState.update { it.copy(updateStatus = UpdateStatus.Available(info)) }
+                _uiState.update {
+                    // A re-check on resume mustn't knock an in-progress download/install back to
+                    // "Available".
+                    if (it.updateStatus is UpdateStatus.Downloading || it.updateStatus is UpdateStatus.ReadyToInstall) {
+                        it
+                    } else {
+                        pendingUpdate = info
+                        it.copy(
+                            updateStatus = UpdateStatus.Available(info),
+                            newerVersion = info.version,
+                            // Stays hidden only for the version "Later" was tapped on — a newer
+                            // release brings the banner back.
+                            updateBannerHidden = info.version == dismissedUpdateVersion
+                        )
+                    }
+                }
             }
         }
+    }
+
+    // In memory only, so a dismissed banner comes back once the app is reopened (process restart).
+    private var dismissedUpdateVersion: String? = null
+
+    /** "Later" (✕) on the update banner: hides it for this version until the app is reopened or
+     * a newer version is released. The Settings icon keeps a small dot meanwhile. */
+    fun dismissUpdateBanner() {
+        dismissedUpdateVersion = pendingUpdate?.version
+        _uiState.update { it.copy(updateBannerHidden = true) }
     }
 
     fun downloadUpdate() {
@@ -279,22 +310,26 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
         val s = _uiState.value
         if (s.scanning) return
-        if (s.tags.isEmpty()) toggleScan() else requestNewScan(fromTrigger = true)
+        if (collectedTagCount() == 0) toggleScan() else requestNewScan(fromTrigger = true)
     }
+
+    // Not uiState.tags — that's only what the search filter currently shows.
+    private fun collectedTagCount(): Int = synchronized(tagMap) { tagMap.size }
 
     /** New Scan button / trigger with tags present: starts fresh unless the tags on screen were
      * never delivered — then the operator decides (send first, or discard) via the confirmation
      * dialog. While a send is still in flight the request is ignored until its result is known. */
     fun requestNewScan(fromTrigger: Boolean = false) {
         val s = _uiState.value
-        when (newScanDecision(s.sendStatus, s.tags.size)) {
+        val count = collectedTagCount()
+        when (newScanDecision(s.sendStatus, count)) {
             NewScanDecision.START -> startNewScan()
             NewScanDecision.IGNORE -> Unit
             // Backgrounded (Background Scanning on): there's no screen to show the dialog on, so
             // the trigger does nothing — the bubble already shows red for the failed send, and
             // the operator gets the choice once they open the app and press again.
             NewScanDecision.CONFIRM_DISCARD -> if (isAppVisible()) {
-                _uiState.update { it.copy(unsentTagsPrompt = UnsentTagsPrompt(s.tags.size, fromTrigger)) }
+                _uiState.update { it.copy(unsentTagsPrompt = UnsentTagsPrompt(count, fromTrigger)) }
             }
         }
     }
@@ -314,12 +349,20 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             startNewScan()
             return
         }
+        clearTags()
+    }
+
+    /** Every path that empties the tag list goes through here, so a failed-send banner (and its
+     * Retry, which has nothing left to resend) can never linger over an empty list — e.g. when
+     * New Scan cleared the tags but the reader then failed to start. */
+    private fun clearTags() {
         synchronized(tagMap) { tagMap.clear() }
         sessionBaselineEpcs = emptySet()
         publishTags()
-        // The failed-send banner (and its Retry) would otherwise linger over an empty list.
-        _uiState.update { it.copy(sendStatus = SendStatus.Idle) }
-        ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+        if (_uiState.value.sendStatus is SendStatus.Error) {
+            _uiState.update { it.copy(sendStatus = SendStatus.Idle) }
+            ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
+        }
     }
 
     fun dismissUnsentTagsPrompt() {
@@ -375,9 +418,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             transitioning.set(false)
             return
         }
-        synchronized(tagMap) { tagMap.clear() }
-        sessionBaselineEpcs = emptySet()
-        publishTags()
+        clearTags()
         beginInventory()
     }
 
@@ -453,14 +494,34 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Recreates the ToneGenerator only when the configured volume actually changes — not per
      * beep, which would reintroduce the exact scan-loop-style jank this app has already fixed
      * once before (constructing a ToneGenerator opens an audio track, not a cheap call). */
-    private fun playBeep() {
+    private fun playBeep() = playTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+
+    // Synchronized: tag-read beeps come from the reader's thread, send-result tones from IO.
+    @Synchronized
+    private fun playTone(tone: Int, durationMs: Int = -1) {
         val volume = _config.value.soundVolume.coerceIn(ScanConfig.MIN_VOLUME, ScanConfig.MAX_VOLUME)
         if (toneGenerator == null || toneGeneratorVolume != volume) {
             toneGenerator?.release()
             toneGeneratorVolume = volume
             toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, volume)
         }
-        toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, BEEP_DURATION_MS)
+        toneGenerator?.startTone(tone, durationMs)
+    }
+
+    /** Send result the operator can tell without looking: the tone follows the Sound setting
+     * (on/off + volume); vibration is always on where the handheld has a motor. Runs whether or
+     * not the app is on screen — with Background Scanning on, the floating bubble's foreground
+     * service keeps both allowed. */
+    private fun signalSendResult(success: Boolean) {
+        SendFeedback.vibrate(getApplication(), success)
+        if (!_config.value.soundEnabled) return
+        val pattern = SendFeedback.toneFor(success)
+        viewModelScope.launch(Dispatchers.Default) {
+            repeat(pattern.repeats) { i ->
+                if (i > 0) delay(pattern.gapMs)
+                playTone(pattern.tone, pattern.durationMs)
+            }
+        }
     }
 
     private fun stopScanAndSend() {
@@ -533,10 +594,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 SendContext.of(config, SendType.REPLACEMENT, request.url, 1), request, error,
                 "OK (replace ${prompt.newRfid})"
             )
-            if (error == null) {
-                synchronized(tagMap) { tagMap.clear() }
-                publishTags()
-            }
+            if (error == null) clearTags()
             _uiState.update {
                 it.copy(replacementPrompt = if (error == null) null else prompt.copy(submitting = false, error = error))
             }
@@ -547,8 +605,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Discards the scanned tag and closes the modal without submitting anything. */
     fun cancelReplacement() {
         _uiState.update { it.copy(replacementPrompt = null) }
-        synchronized(tagMap) { tagMap.clear() }
-        publishTags()
+        clearTags()
     }
 
     /** Local backup, independent of whether the API send below succeeds — best-effort, never
@@ -574,7 +631,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     fun retrySend() {
         if (_uiState.value.sendStatus !is SendStatus.Error) return
         val snapshot = synchronized(tagMap) { tagMap.values.toList() }
-        if (snapshot.isEmpty()) return
+        if (snapshot.isEmpty()) {
+            // Nothing left to resend — drop the stale error instead of a Retry that does nothing.
+            clearTags()
+            return
+        }
         _uiState.update { it.copy(sendStatus = SendStatus.Sending) }
         viewModelScope.launch(Dispatchers.IO) { sendSnapshot(snapshot) }
     }
@@ -584,7 +645,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         val request = api.tagsRequest(config, snapshot)
         val error = api.post(request)
         _uiState.update {
-            it.copy(sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error))
+            it.copy(
+                sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error, snapshot.size)
+            )
         }
         logSend(
             SendContext.of(config, SendType.RFID_BATCH, request.url, snapshot.size), request, error,
@@ -596,9 +659,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** Every send (scan batch, barcode, replacement, or a resend from Log History) is logged with
-     * its type, the config it went out under, and the exact body — so it can be shown and resent
-     * later regardless of what Settings say by then. */
+    /** Every send (scan batch, barcode, replacement, or a resend from Log History) ends here: it's
+     * logged with its type, the config it went out under, and the exact body — so it can be shown
+     * and resent later regardless of what Settings say by then — and its result is signalled
+     * (vibration + tone, see [signalSendResult]). */
     private fun logSend(
         context: SendContext,
         request: OutgoingRequest,
@@ -606,6 +670,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         okDetail: String,
         resendOf: Long? = null
     ) {
+        signalSendResult(error == null)
         configRepo.appendSendLog(
             SendLogEntry(
                 timestamp = System.currentTimeMillis(),
@@ -657,7 +722,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(
                 tags = applySortAndFilter(snapshot, it.sortOption, it.searchQuery),
-                totalReads = snapshot.sumOf { t -> t.readCount }
+                totalReads = snapshot.sumOf { t -> t.readCount },
+                uniqueCount = snapshot.size
             )
         }
     }

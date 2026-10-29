@@ -54,8 +54,20 @@ The main screen, and the only one an operator needs day to day.
 
 ![Scan screen, idle](docs/screenshots/scan-empty.png)
 
-- **Summary card** — total tags detected (raw reads) and total unique tags this session, plus the
-  time of the last completed scan
+- **Active-config chips** — a row of small chips just under the title showing the saved config,
+  so a wrong setting is caught before anything is sent: scan type (**RFID** / **Barcode**, purple
+  for Barcode), **WO** / **Register**, **Opname** (only when on), **Replacement** (only when active
+  — orange, since scanning behaves completely differently), the **RR Type**, the **Factory Code**,
+  and the server's short name from Base URL (e.g. `wms.suite`, `product.suite`). An empty RR
+  Type or Factory Code shows as a red *"RR Type –"* / *"Factory Code –"* chip. The row scrolls
+  sideways when it doesn't fit, updates as soon as Settings is saved, and tapping it opens
+  Settings
+- **Summary card** — kept compact so the tag list gets the room: one small line with the unique
+  tag count, total reads (raw detections), and on the right the time of the last scan — preceded
+  by the send status while there is one (*Sending…*, green *✓ Sent*, red *✗*) — then the scan
+  button(s) (48dp tall) right below. The title bar is 48dp and the search/sort row 36dp for the
+  same reason: on a 480×800 handheld (Zebra MC33) at least 5 tag rows are visible without
+  scrolling, 4 with the update banner showing
 - **Start Scan / Stop Scan** — tap, or hold the physical trigger; releasing the trigger stops the
   scan the same as tapping Stop
 - **New Scan vs Continue** — once a session has tags, the button row splits: **New Scan** clears
@@ -74,10 +86,22 @@ The main screen, and the only one an operator needs day to day.
   With Background Scanning on and the app not on screen, the trigger is ignored in that failed
   state (there's no screen to ask on) — the floating bubble stays red until the operator opens
   the app and chooses
-- **Send status** — after a scan stops, the collected tags post to your API automatically; a
-  banner shows Sending → Sent (n tags) or a Retry button on failure. On failure, the banner shows
-  a plain-language message rather than the raw server response — see
-  [Send errors & log history](#send-errors--log-history)
+- **Send status** — after a scan stops, the collected tags post to your API automatically; the
+  summary line shows Sending → ✓ Sent, and on failure a line below the scan button adds a Retry
+  button (*Kirim Ulang* in Indonesian). That failure line leads with how many tags didn't make it, then a plain-language
+  message rather than the raw server response — e.g. *"16 tags not sent — System error, please
+  contact WMS Team"*; see [Send errors & log history](#send-errors--log-history). The error banner
+  is only ever about tags still on screen: once the list is emptied (New Scan, discard,
+  replacement) it's cleared, so Retry always has something to send
+- **Total Unique** counts every collected tag, not just the ones the search box currently shows
+
+<table>
+<tr>
+<td><img src="docs/screenshots/scan-sent.png" alt="Summary line showing Sent after a scan" /><br/><sub>✓ Sent in the summary line</sub></td>
+<td><img src="docs/screenshots/scan-config-chips-replacement.png" alt="Config chips with the orange Replacement chip" /><br/><sub>Config chips, Replacement active</sub></td>
+<td><img src="docs/screenshots/scan-unsent-dialog.png" alt="Unsent tags confirmation dialog" /><br/><sub>Unsent tags: Send first / Discard / Cancel</sub></td>
+</tr>
+</table>
 
 - **Tag list** — sorted and searchable; each row shows the EPC, read count (`R:`), a **Quality**
   label, and a **NEW** / **EXISTING** badge (whether this tag was already in the list before the
@@ -100,6 +124,13 @@ turned into one plain-language line instead:
 - Anything that isn't a parsed HTTP response at all (a network/timeout exception, or a body that
   didn't parse) falls back to showing the raw text, in red.
 
+<table>
+<tr>
+<td><img src="docs/screenshots/send-error-system.png" alt="HTTP 500: generic system error in red" /><br/><sub>HTTP 500: generic message (red)</sub></td>
+<td><img src="docs/screenshots/send-error-message.png" alt="Other status: the server's own message in blue" /><br/><sub>Other status: server's message (blue)</sub></td>
+</tr>
+</table>
+
 Generalizing the 500 case intentionally throws away detail on screen — so nothing is lost, every
 send attempt (success or failure — RFID batch, barcode, or RFID replacement) is also written to a
 small on-device log: **Settings → Log History** shows the last 30 attempts, newest first. Each
@@ -119,6 +150,14 @@ entry shows:
   extra fields — see [Resends](#resends) for the backend. Not offered for a replacement that
   already succeeded (the old tag is already swapped out server-side, so it could only be
   rejected), nor for entries logged before this version (their payload was never stored)
+
+<table>
+<tr>
+<td><img src="docs/screenshots/settings-log-history-dialog.png" alt="Log History list with type badges and Resend buttons" /><br/><sub>Log History</sub></td>
+<td><img src="docs/screenshots/settings-log-history-detail.png" alt="Expanded log entry details" /><br/><sub>Details expanded</sub></td>
+<td><img src="docs/screenshots/settings-log-resend-confirm.png" alt="Resend confirmation with duplicate warning" /><br/><sub>Resend confirmation</sub></td>
+</tr>
+</table>
 
 Only the small per-entry summary is kept in SharedPreferences; each payload is stored as its own
 file in the app's private storage (`files/send_log/`), deleted when its entry drops off the
@@ -289,12 +328,30 @@ is_new`.
 
 The app checks this repo's GitHub Releases for a newer version on every launch and every time it
 returns to the foreground (throttled to at most once every 5 minutes). If a newer release exists,
-a banner appears on the Scan screen:
+a slim one-line banner appears on the Scan screen:
 
-1. **Update available: vX.Y.Z** → tap **Update Now** to download
+1. **Update available: vX.Y.Z** → tap **Update**, then confirm **Download update** in the dialog
+   (*Cancel* leaves everything as is — the banner sits just under the often-tapped config chips,
+   so a stray tap mustn't start a download on its own; the same applies to *Retry* after a
+   failed download)
 2. Once downloaded, tap **Install** — this hands off to Android's standard package installer
 3. The very first time on a given device, Android may show its own "allow installs from this app"
    permission screen — a one-time approval per device, not per update
+
+<table>
+<tr>
+<td><img src="docs/screenshots/scan-empty.png" alt="Slim update banner on the Scan screen" /><br/><sub>Slim banner with Update and ✕</sub></td>
+<td><img src="docs/screenshots/update-confirm-dialog.png" alt="Download update confirmation" /><br/><sub>Confirm before downloading</sub></td>
+</tr>
+</table>
+
+**Later (✕)** hides the banner for that version until the app is reopened (fully closed and
+started again) or a newer version is released — it otherwise takes room from the tag list. While
+it's hidden, a small red dot on the Settings icon is the reminder — and points the way: the same
+banner (without ✕) sits at the top of Settings, so the update can still be started from there
+without restarting the app. The version line at the very bottom of Settings also says so
+(*Version 1.1 · Update available: v1.5.15*). A re-check on resume never
+interrupts a download or an install already in progress.
 
 No laptop, no cable, no manual APK transfer — see [Releasing](#releasing-fully-automated) for how
 new versions get published in the first place.
@@ -324,7 +381,12 @@ Every section, top to bottom, each with its own icon:
     every handheld in a fleet gets a unique, human-readable ID with zero per-device setup
   - **Antenna** — editable dropdown
 
-![API Configuration section](docs/screenshots/settings-api-config.png)
+<table>
+<tr>
+<td><img src="docs/screenshots/settings-api-config.png" alt="API Configuration with the Connected status under Base URL" /><br/><sub>Base URL: Connected</sub></td>
+<td><img src="docs/screenshots/settings-base-url-failed.png" alt="Base URL fetch failed with Try again" /><br/><sub>Base URL: failed, Try again</sub></td>
+</tr>
+</table>
 
 - **Register Configuration** — Maker Name and Initial Year are editable dropdowns that remember
   custom entries; **RR Type** and **Factory Code** are selection-only (no manual typing) and
@@ -347,7 +409,18 @@ Every section, top to bottom, each with its own icon:
 
 ![End of Register Configuration and start of Power](docs/screenshots/settings-register-power.png)
 
-- **Sound** — beep on tag read, on/off, plus a volume slider when enabled
+- **Sound** — beep on tag read, on/off, plus a volume slider when enabled. The same switch and
+  volume also cover the **send-result tone**, so the operator knows the outcome without looking
+  at the screen: **sent** = a quick double beep (`TONE_PROP_ACK`), **failed** = a low beep three
+  times (`TONE_PROP_NACK` ×3). It plays for every kind of send — RFID batch, barcode, RFID
+  replacement, and a resend from Log History — including while the app is in the background with
+  Background Scanning on
+
+**Send-result vibration** mirrors the tone — 1 short buzz = sent, 3 buzzes = failed — and is
+always on (no separate switch) on handhelds that have a vibration motor. The current fleet
+doesn't: the **Zebra MC33 has no motor**, and the **Chainway C72** reports one that doesn't
+physically buzz (Android runs the pattern, nothing is felt). That's why the tone carries the same
+1-vs-3 pattern — on these units it's the cue.
 
 ![Power slider and Sound settings](docs/screenshots/settings-power-sound.png)
 
@@ -361,10 +434,25 @@ Every section, top to bottom, each with its own icon:
   detail, and a Resend button; see
   [Send errors & log history](#send-errors--log-history). Survives "Reset" (it's device-level
   diagnostic data, not a setting)
-- **Reset** — clears everything above back to defaults (never touches device type or language)
-- **Save** — validates and persists; the app's current version is shown just below this row
+- **Reset** — clears everything above back to defaults (never touches device type or language),
+  after a confirmation dialog (*Cancel* / red *Reset*) — a stray tap can't wipe Base URL, Factory
+  Code and the rest, and Cancel leaves even unsaved edits as they were
+- **Save** — validates and persists; disabled while nothing has changed. **Reset** and **Save**
+  sit in a bar pinned to the bottom of the screen, so they're always visible without scrolling;
+  the app's current version is shown at the very end of the page
+- **Unsaved changes** — leaving Settings (top-bar arrow or the Android back button) with changes
+  not yet saved asks *"Save changes?"* — **Save** (validation still applies: if it fails you stay
+  in Settings with the errors shown), **Discard**, or **Cancel**. With nothing changed, back
+  leaves right away. Changes Settings makes on its own count too — e.g. switching Base URL clears
+  an RR Type / Factory Code the new server doesn't have
 
-![Language, Reset/Save, and the version footer](docs/screenshots/settings-lang-reset-save.png)
+<table>
+<tr>
+<td><img src="docs/screenshots/settings-lang-reset-save.png" alt="Language, Log History, version line, pinned Reset/Save bar" /><br/><sub>Pinned Reset / Save bar</sub></td>
+<td><img src="docs/screenshots/settings-reset-confirm.png" alt="Reset confirmation dialog" /><br/><sub>Reset confirmation</sub></td>
+<td><img src="docs/screenshots/settings-unsaved-dialog.png" alt="Save changes dialog on leaving Settings" /><br/><sub>Unsaved changes on leaving</sub></td>
+</tr>
+</table>
 
 ## Language
 
@@ -402,7 +490,10 @@ string table, so nothing drifts out of sync between languages.
   test versionCode to trigger again.
 - **Update download times out** — the in-app updater downloads the APK itself (a few MB) over
   whatever network the handheld has; on slow warehouse WiFi the first attempt can occasionally
-  time out. Tapping Update Now again retries cleanly.
+  time out. Tapping Retry on the update banner (then confirming) retries cleanly.
+- **"Gate not found for the given reader_id and antenna" when sending** — the WMS server doesn't
+  know this handheld yet: its Reader ID (Settings → API Configuration) + Antenna aren't registered
+  as a Gate. Have a WMS admin register them, then tap Retry.
 - **Barcode mode on Zebra: trigger scans but nothing shows up in the app** — the scan engine
   decoded successfully but DataWedge routed the result to a different profile's default keystroke
   output, which a focus-less Compose screen silently swallows. The app now force-activates its own

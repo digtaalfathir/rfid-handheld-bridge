@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -73,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import com.stechoq.wms.BuildConfig
 import com.stechoq.wms.DropdownFetchState
 import com.stechoq.wms.ScanViewModel
+import com.stechoq.wms.UpdateStatus
 import com.stechoq.wms.data.AppLanguage
 import com.stechoq.wms.data.FactoryCodeOption
 import com.stechoq.wms.data.InputMode
@@ -108,6 +111,7 @@ fun SettingsScreen(
     var draft by remember { mutableStateOf(viewModel.config.value) }
     var errors by remember { mutableStateOf(emptyMap<String, ValidationErrorType>()) }
     var showLogHistory by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
     val powerRange = remember { viewModel.powerRange }
     val antennaOptions = remember { viewModel.antennaOptions() }
     var rrTypeOptions by remember { mutableStateOf(viewModel.rrTypeOptions()) }
@@ -116,6 +120,7 @@ fun SettingsScreen(
     val initialYearOptions = remember { viewModel.initialYearOptions() }
     var factoryCodeOptions by remember { mutableStateOf(viewModel.factoryCodeOptions()) }
     val fetchState by viewModel.dropdownFetch.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     // Set by a pick from the Base URL menu, so the effect below fetches right away instead of
     // waiting out the typing debounce.
     var skipDebounce by remember { mutableStateOf(false) }
@@ -152,16 +157,72 @@ fun SettingsScreen(
         }
     }
 
+    // Unsaved = the draft differs from what's actually saved. This includes edits Settings made
+    // on its own (e.g. a Base URL change clearing an RR Type the new server doesn't have) — those
+    // are just as lost on leaving without Save.
+    val savedConfig by viewModel.config.collectAsState()
+    val hasUnsavedChanges = draft != savedConfig
+    var showUnsavedConfirm by remember { mutableStateOf(false) }
+
+    // Validation still applies however Save is reached; on failure stay here with errors shown.
+    fun saveAndExit() {
+        val result = viewModel.saveConfig(draft)
+        errors = result
+        if (result.isEmpty()) {
+            Toast.makeText(context, strings.configSavedToast, Toast.LENGTH_SHORT).show()
+            onDone()
+        } else {
+            Toast.makeText(context, strings.configInvalidToast, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun requestExit() {
+        if (hasUnsavedChanges) showUnsavedConfirm = true else onDone()
+    }
+
+    // The Android back button/gesture, same as the top bar's arrow.
+    BackHandler { requestExit() }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(strings.settingsTitle, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    IconButton(onClick = onDone) {
+                    IconButton(onClick = { requestExit() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = strings.backDescription)
                     }
                 }
             )
+        },
+        // Pinned so Save/Reset never need a scroll to the bottom of this long page.
+        bottomBar = {
+            Surface(shadowElevation = 8.dp) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    OutlinedButton(
+                        // Wipes every setting and the dropdown cache in one tap — always confirmed first.
+                        onClick = { showResetConfirm = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.RestartAlt, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.reset)
+                    }
+                    Button(
+                        onClick = { saveAndExit() },
+                        enabled = hasUnsavedChanges,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.Save, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.save)
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -171,6 +232,17 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            // Where the Scan screen's red dot on the Settings icon points: the update banner the
+            // operator put off with "Later" stays reachable here, at the top, without a restart.
+            if (uiState.updateStatus !is UpdateStatus.Idle) {
+                UpdateBanner(
+                    status = uiState.updateStatus,
+                    onDownload = { viewModel.downloadUpdate() },
+                    onInstall = { viewModel.installUpdate() }
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
             SectionCard(
                 title = strings.scanModeTitle,
                 icon = Icons.Filled.QrCodeScanner,
@@ -348,7 +420,12 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(strings.soundToggleLabel, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        strings.soundToggleLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Switch(checked = draft.soundEnabled, onCheckedChange = { draft = draft.copy(soundEnabled = it) })
                 }
                 if (draft.soundEnabled) {
@@ -445,11 +522,10 @@ fun SettingsScreen(
                 LogHistoryDialog(viewModel = viewModel, onDismiss = { showLogHistory = false })
             }
 
-            Spacer(Modifier.height(20.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = {
+            if (showResetConfirm) {
+                ResetConfirmDialog(
+                    onConfirm = {
+                        showResetConfirm = false
                         draft = viewModel.resetConfig()
                         errors = emptyMap()
                         // Reset wipes the cached lists too — without this the dropdowns would
@@ -459,35 +535,33 @@ fun SettingsScreen(
                         viewModel.cancelDropdownFetch()
                         Toast.makeText(context, strings.configResetToast, Toast.LENGTH_SHORT).show()
                     },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Filled.RestartAlt, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.reset)
-                }
-                Button(
-                    onClick = {
-                        val result = viewModel.saveConfig(draft)
-                        errors = result
-                        if (result.isEmpty()) {
-                            Toast.makeText(context, strings.configSavedToast, Toast.LENGTH_SHORT).show()
-                            onDone()
-                        } else {
-                            Toast.makeText(context, strings.configInvalidToast, Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Filled.Save, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.save)
-                }
+                    onCancel = { showResetConfirm = false }
+                )
             }
 
-            Spacer(Modifier.height(16.dp))
+            if (showUnsavedConfirm) {
+                UnsavedChangesDialog(
+                    onSave = {
+                        showUnsavedConfirm = false
+                        saveAndExit()
+                    },
+                    onDiscard = {
+                        showUnsavedConfirm = false
+                        onDone()
+                    },
+                    onCancel = { showUnsavedConfirm = false }
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
 
             Text(
-                "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
+                // e.g. "Versi 1.1 · Update tersedia: v1.5.15" — the banner at the top is where
+                // to start it; this just says so where the version is naturally looked up.
+                listOfNotNull(
+                    "${strings.versionPrefix}${BuildConfig.VERSION_NAME}",
+                    uiState.newerVersion?.let { "${strings.updateAvailablePrefix}$it" }
+                ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -660,6 +734,46 @@ private fun SelectOnlyDropdownField(label: String, value: String, options: List<
             }
         }
     }
+}
+
+/** Leaving Settings (arrow or Android back) with edits not yet saved. */
+@Composable
+private fun UnsavedChangesDialog(onSave: () -> Unit, onDiscard: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.unsavedChangesTitle) },
+        text = { Text(strings.unsavedChangesMessage) },
+        confirmButton = {
+            Button(onClick = onSave) { Text(strings.save) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onCancel) { Text(strings.cancel) }
+                TextButton(onClick = onDiscard) { Text(strings.discard, color = ErrorRed) }
+            }
+        }
+    )
+}
+
+/** Reset clears every setting (Base URL, Factory Code, …) plus the dropdown cache, so a stray
+ * tap mustn't do it outright. Cancel leaves everything — including unsaved edits — untouched. */
+@Composable
+private fun ResetConfirmDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(strings.resetConfirmTitle) },
+        text = { Text(strings.resetConfirmMessage) },
+        confirmButton = {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)) {
+                Text(strings.reset)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(strings.cancel) }
+        }
+    )
 }
 
 // Long batch payloads are cut off on screen — the stored body (and what a resend posts) is whole.
