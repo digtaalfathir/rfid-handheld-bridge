@@ -20,6 +20,7 @@ import com.stechoq.wms.data.FactoryCodeOption
 import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ReplacementReason
 import com.stechoq.wms.data.ScanConfig
+import com.stechoq.wms.data.ScanJudgement
 import com.stechoq.wms.data.ScanMode
 import com.stechoq.wms.data.SendContext
 import com.stechoq.wms.data.SendLogEntry
@@ -27,6 +28,7 @@ import com.stechoq.wms.data.SendType
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
 import com.stechoq.wms.data.ValidationErrorType
+import com.stechoq.wms.data.parseScanJudgement
 import com.stechoq.wms.network.ApiClient
 import com.stechoq.wms.network.OutgoingRequest
 import com.stechoq.wms.network.UpdateClient
@@ -132,7 +134,10 @@ data class ScanUiState(
     val barcodeScans: List<BarcodeScanRecord> = emptyList(),
     val replacementPrompt: ReplacementPrompt? = null,
     // Non-null while the "unsent tags" confirmation is showing.
-    val unsentTagsPrompt: UnsentTagsPrompt? = null
+    val unsentTagsPrompt: UnsentTagsPrompt? = null,
+    // WO mode's per-tag match/mismatch breakdown from the last successful send — see
+    // ScanJudgement.kt. Null in Register mode (its response has none) and cleared on every new scan.
+    val judgement: ScanJudgement? = null
 )
 
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
@@ -359,6 +364,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         synchronized(tagMap) { tagMap.clear() }
         sessionBaselineEpcs = emptySet()
         publishTags()
+        if (_uiState.value.judgement != null) _uiState.update { it.copy(judgement = null) }
         if (_uiState.value.sendStatus is SendStatus.Error) {
             _uiState.update { it.copy(sendStatus = SendStatus.Idle) }
             ScanStateBus.update(ScanStateBus.BubbleState.IDLE, 0)
@@ -389,7 +395,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val config = _config.value
             val request = api.codesRequest(config, mapOf(code to TagQuality.STRONG.wireValue))
-            val error = api.post(request)
+            val error = api.post(request).error
             val newStatus = if (error == null) BarcodeSendStatus.SENT else BarcodeSendStatus.FAILED
             logSend(SendContext.of(config, SendType.BARCODE, request.url, 1), request, error, "OK ($code)")
             _uiState.update { state ->
@@ -589,7 +595,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val config = _config.value
             val request = api.replacementRequest(config, oldRfid, prompt.newRfid, reason.wireValue)
-            val error = api.post(request)
+            val error = api.post(request).error
             logSend(
                 SendContext.of(config, SendType.REPLACEMENT, request.url, 1), request, error,
                 "OK (replace ${prompt.newRfid})"
@@ -643,10 +649,15 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun sendSnapshot(snapshot: List<TagRecord>) {
         val config = _config.value
         val request = api.tagsRequest(config, snapshot)
-        val error = api.post(request)
+        val result = api.post(request)
+        val error = result.error
+        // WO mode's response carries a per-tag match/mismatch judgement; Register mode's lightweight
+        // response has no "tags" array, so this is naturally null there too — see ScanJudgement.kt.
+        val judgement = if (error == null) result.responseBody?.let(::parseScanJudgement) else null
         _uiState.update {
             it.copy(
-                sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error, snapshot.size)
+                sendStatus = if (error == null) SendStatus.Success(snapshot.size) else SendStatus.Error(error, snapshot.size),
+                judgement = judgement
             )
         }
         logSend(
@@ -697,7 +708,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 false
             } else {
                 val request = OutgoingRequest(context.url, markAsResend(body, entry.timestamp))
-                val error = api.post(request)
+                val error = api.post(request).error
                 logSend(context, request, error, "OK (resend)", resendOf = entry.timestamp)
                 error == null
             }

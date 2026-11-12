@@ -43,8 +43,12 @@ class ApiClient {
     fun codesRequest(config: ScanConfig, codes: Map<String, String>): OutgoingRequest =
         OutgoingRequest(config.fullApiUrl(), buildPayload(config, codes, isoNow()).toString())
 
-    /** Returns null on success, or a human-readable reason on failure. */
-    fun post(outgoing: OutgoingRequest): String? {
+    /** [error] is null on success, a human-readable reason otherwise. [responseBody] is the raw
+     * success body (for WO mode's judgement enrichment — see [com.stechoq.wms.data.ScanJudgement]);
+     * null on failure, since the failure detail already carries the body inside [error]. */
+    data class PostResult(val error: String?, val responseBody: String? = null)
+
+    fun post(outgoing: OutgoingRequest): PostResult {
         return try {
             val body = outgoing.body.toRequestBody("application/json; charset=utf-8".toMediaType())
             val request = Request.Builder().url(outgoing.url).post(body).build()
@@ -53,10 +57,11 @@ class ApiClient {
                 // Full, untruncated body: the caller both parses it as JSON for a clean on-screen
                 // message and keeps the raw text around for Settings' log history — a truncated
                 // body would silently break the former and shortchange the latter.
-                if (resp.isSuccessful) null else "HTTP ${resp.code} ${resp.body?.string().orEmpty()}"
+                val text = resp.body?.string().orEmpty()
+                if (resp.isSuccessful) PostResult(null, text) else PostResult("HTTP ${resp.code} $text")
             }
         } catch (e: Exception) {
-            e.message ?: e.javaClass.simpleName
+            PostResult(e.message ?: e.javaClass.simpleName)
         }
     }
 

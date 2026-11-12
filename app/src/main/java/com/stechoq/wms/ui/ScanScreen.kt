@@ -84,6 +84,7 @@ import com.stechoq.wms.data.BarcodeSendStatus
 import com.stechoq.wms.data.InputMode
 import com.stechoq.wms.data.ReplacementReason
 import com.stechoq.wms.data.ScanConfig
+import com.stechoq.wms.data.ScanJudgement
 import com.stechoq.wms.data.TagQuality
 import com.stechoq.wms.data.TagRecord
 import com.stechoq.wms.network.formatSendError
@@ -343,6 +344,7 @@ private fun SummaryCard(
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
             SummaryLine(state)
+            state.judgement?.let { JudgementLine(it) }
 
             Spacer(Modifier.height(6.dp))
 
@@ -477,6 +479,49 @@ private fun SummaryLine(state: ScanUiState) {
             }
         }
     }
+}
+
+/** Matches the server's judgement "note" strings (see Handheld RFID Scan Judgement Response.md) to
+ * a highlight color: green only for an actual match, red for an unregistered tag, blue for a
+ * duplicate read, amber for anything else (type mismatch, or any future note not covered above) —
+ * so an operator can tell the result apart at a glance instead of reading every word. */
+private fun noteColor(note: String): Color = when {
+    note.startsWith("Data Match") -> SuccessGreen
+    note.contains("Not Registered") -> ErrorRed
+    note.contains("Duplicate") -> BluePrimary
+    else -> WarningAmber
+}
+
+/** WO mode only: "WO WO.DEV-... (devanning) 162/122 · 10 Data Match, 5 RFID Not Registered" under
+ * the summary line after a send, each note count colored by [noteColor] — kept to one small row
+ * (wraps to 2 lines max) rather than a full breakdown table, so the screen doesn't get busier than
+ * the tag list it's sitting above. */
+@Composable
+private fun JudgementLine(judgement: ScanJudgement) {
+    val strings = LocalStrings.current
+    if (judgement.noteCounts.isEmpty()) return
+    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
+    val text = buildAnnotatedString {
+        judgement.wo?.let { wo ->
+            withStyle(SpanStyle(color = neutral)) {
+                val number = wo.woNumber?.takeIf { it.isNotBlank() } ?: "-"
+                append("${strings.judgementWoPrefix} $number (${wo.woType}) ${wo.qtyActual}/${wo.qtyPlanning} · ")
+            }
+        }
+        judgement.noteCounts.forEachIndexed { index, (note, count) ->
+            if (index > 0) withStyle(SpanStyle(color = neutral)) { append(", ") }
+            withStyle(SpanStyle(color = noteColor(note), fontWeight = FontWeight.SemiBold)) {
+                append("$count $note")
+            }
+        }
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+    )
 }
 
 /** The saved config at a glance — before this, only Barcode mode had any on-screen cue, so a

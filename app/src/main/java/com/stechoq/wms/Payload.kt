@@ -1,16 +1,23 @@
 package com.stechoq.wms
 
 import com.stechoq.wms.data.ScanConfig
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** WO and Register now share one endpoint and one payload shape; "mode" tells them apart server-side.
  * [codes] maps each EPC/barcode to its quality wire value ("low"/"medium"/"strong" — see
- * [com.stechoq.wms.data.TagQuality]), becoming the "idHex" object. */
+ * [com.stechoq.wms.data.TagQuality]), becoming the "idHex" array (per Handheld RFID Scan Judgement
+ * Response.md's request shape: a list of {"idHex", "rssi"} objects, not a single EPC-keyed object). */
 fun buildPayload(config: ScanConfig, codes: Map<String, String>, timestamp: String): JSONObject =
     JSONObject().apply {
         put("rr_type", config.rrType)
         put("maker_name", config.makerName)
-        put("idHex", JSONObject(codes))
+        put("idHex", JSONArray(codes.map { (epc, quality) ->
+            JSONObject().apply {
+                put("idHex", epc)
+                put("rssi", quality)
+            }
+        }))
         put("initial_year", config.initialYear)
         put("reader_id", config.readerId)
         put("antenna", config.antenna)

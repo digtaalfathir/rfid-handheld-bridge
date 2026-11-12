@@ -387,6 +387,39 @@ Di bawah tombol WO/Register ada satu centang: <i>"Hasil scan langsung dikirim ke
 ini"</i>, tersedia di <b>kedua mode</b>. Jika dicentang, hasil scan tersebut juga langsung
 memperbarui stok saat itu juga.
 </div>
+
+<h3>Hasil Penilaian Otomatis (khusus Mode WO)</h3>
+<p>Saat mengirim di <b>Mode WO</b>, server langsung membalas dengan progres Work Order yang sedang
+berjalan beserta penilaian setiap tag yang dikirim &mdash; operator tidak perlu lagi menebak atau
+membuka sistem lain untuk tahu hasilnya. Satu baris baru muncul di kartu ringkasan, tepat di bawah
+status Terkirim:</p>
+
+<div class="shot">
+  <img src="screenshots/scan-wo-judgement.png" width="190" height="317">
+  <div class="cap">Progres WO (nomor, tipe, qty aktual/rencana) &amp; rincian status tag berwarna</div>
+</div>
+
+<ul>
+<li><b>Nomor &amp; progres WO</b> &mdash; nomor Work Order, tipenya (<i>devanning</i>,
+<i>receiving</i>, atau <i>delivery</i>), serta jumlah qty yang sudah tercatat dibanding target
+(<i>aktual/rencana</i>).</li>
+<li><b>Rincian status tag</b> &mdash; jumlah tag per status, masing-masing diberi warna agar
+langsung terlihat tanpa perlu membaca satu-satu:</li>
+</ul>
+
+<table class="ref">
+<tr><th>Warna</th><th>Status</th><th>Artinya</th></tr>
+<tr><td>Hijau</td><td>Data Match</td><td>Tag cocok dan tercatat sesuai rencana WO</td></tr>
+<tr><td>Merah</td><td>RFID Not Registered</td><td>Tag belum terdaftar di sistem</td></tr>
+<tr><td>Biru</td><td>Duplicate RFID Scanned</td><td>Tag sudah pernah tercatat sebelumnya (dobel)</td></tr>
+<tr><td>Kuning/oranye</td><td>Lainnya (mis. Type Not Match)</td><td>Tag terbaca tapi ada ketidaksesuaian &mdash; perlu dicek manual</td></tr>
+</table>
+
+<div class="note">
+Baris ini <u>hanya muncul di Mode WO</u> &mdash; Mode Register tetap memakai balasan ringkas seperti
+sebelumnya, karena penilaian per-tag ini memang dirancang untuk mencocokkan hasil scan terhadap WO
+yang sedang berjalan. Baris ini hilang otomatis begitu <b>Scan Baru</b> ditekan.
+</div>
 </div>
 
 <!-- ===================== 8. PENGGANTIAN RFID ===================== -->

@@ -38,6 +38,8 @@ data class AppStrings(
     val scanStartErrorPrefix: String,
     val sending: String,
     val sentPrefix: String,
+    // WO mode only: the match/mismatch breakdown line shown under the summary after a send.
+    val judgementWoPrefix: String,
     val tagWord: String,
     val systemErrorGeneric: String,
     val retry: String,
@@ -274,6 +276,7 @@ val EnglishStrings = AppStrings(
     scanStartErrorPrefix = "Failed to start scan: ",
     sending = "Sending...",
     sentPrefix = "Sent",
+    judgementWoPrefix = "WO",
     tagWord = "tags",
     systemErrorGeneric = "System error, please contact WMS Team",
     retry = "Retry",
@@ -434,6 +437,7 @@ val IndonesianStrings = AppStrings(
     scanStartErrorPrefix = "Gagal memulai scan: ",
     sending = "Mengirim...",
     sentPrefix = "Terkirim",
+    judgementWoPrefix = "WO",
     tagWord = "tag",
     systemErrorGeneric = "Terjadi kesalahan sistem, silakan hubungi Tim WMS",
     // Update-download retry (banner) — the send banner's button uses retrySend below.
